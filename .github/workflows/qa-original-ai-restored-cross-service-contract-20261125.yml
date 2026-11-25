@@ -1,0 +1,119 @@
+name: Original AI Restored Hosting to Deployed Services Contract (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-hosting-node-python-contract-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Read exact restored Hosting, deployed Node, deployed Python and native QA sources
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sources = {
+              restoredHosting: '5af28d279618dacd5eab518e5e0d52259eae8844',
+              deployedNode: 'd06aeb1e0a572bf8581a99d7064da0a8d2430ed4',
+              deployedPython: '319152e6a1cad5e54653c20e87bd1551a82b219e',
+              nativeFix: '82d55847cfc766d56abd537db0714761cc132989',
+            };
+            const read = async (ref, name) => {
+              const {data} = await github.rest.repos.getContent({owner,repo,path:name,ref});
+              if(Array.isArray(data) || data.encoding!=='base64') throw Error('Unsupported source response: '+name);
+              return Buffer.from(data.content,'base64').toString('utf8');
+            };
+            const [web,client,admin,node,ai,native]=await Promise.all([
+              read(sources.restoredHosting,'app/identity-verification.web.tsx'),
+              read(sources.restoredHosting,'lib/identityVerification.ts'),
+              read(sources.restoredHosting,'app/(admin)/identity-reviews.tsx'),
+              read(sources.deployedNode,'backend/server.js'),
+              read(sources.deployedPython,'identity-ai/main.py'),
+              read(sources.nativeFix,'app/identity-verification.tsx'),
+            ]);
+            const assert=require('assert').strict;
+            const checks=[];
+            const check=(label,condition)=>{
+              if(!condition) throw Error('CROSS-SERVICE CONTRACT FAILED: '+label);
+              checks.push(label); core.info('PASS: '+label);
+            };
+            const substring=(s,from,to)=>{
+              const a=s.indexOf(from);
+              const b=s.indexOf(to,a+from.length);
+              assert.ok(a>=0 && b>a,'Unable to isolate contract section: '+from+' -> '+to);
+              return s.slice(a,b);
+            };
+            // Restoration source is immutable: no changes to web, client or Admin UI.
+            check('Restored Hosting has separate OCR ID scan and selfie stages',
+              web.includes('await precheckIdentityDocument({') &&
+              web.includes('await submitIdentityVerification({') &&
+              web.includes('if (result.outcome === "review") {'));
+            check('Restored Hosting documents are explicitly consented and private',
+              client.includes('body.append("identityEvidenceConsent", "true")') &&
+              client.includes('formData.append("identityEvidenceConsent", "true")') &&
+              client.includes('"X-VolunServe-Document-Precheck-Consent": "true"'));
+            check('Restored Hosting calls exactly the deployed Node identity evidence routes',
+              client.includes('/api/identity/document/precheck-with-evidence') &&
+              client.includes('/api/identity/verify-with-evidence') &&
+              node.includes('/api/identity/document/precheck-with-evidence') &&
+              node.includes('/api/identity/verify-with-evidence'));
+            check('Restored Hosting prevents a staging Firebase token going to production backend',
+              client.includes('auth.app.options.projectId === "volunserve-3aa5b"') &&
+              client.includes('Staging identity verification is blocked'));
+            const precheck=substring(node,'IDENTITY_DOC_PRECHECK_COOLDOWN_MS =', 'app.get(\n  "/api/identity/status"');
+            check('Deployed Node ID-only route requires Firebase authentication and ID consent',
+              precheck.includes('requireFirebaseUser') &&
+              precheck.includes('x-volunserve-document-precheck-consent') &&
+              precheck.includes('classifyHybridDocumentPrecheck') &&
+              precheck.includes('status: pending ? "pending" : null'));
+            const verify=substring(node,'"/api/identity/verify-with-evidence"', '"/api/admin/identity/reviews"');
+            check('Deployed Node selfie route requires authenticated user and private evidence consent',
+              verify.includes('requireFirebaseUser') &&
+              verify.includes('identity_evidence_consent_required') &&
+              verify.includes('enforceSelectedIdDecision('));
+            check('Deployed Python has original MediaPipe matcher, protected OCR and selfie routes',
+              ai.includes('def run_face_verification(') &&
+              ai.includes('mp.solutions.face_mesh') &&
+              ai.includes('@app.post("/document/precheck")') &&
+              /@app\.post\(\s*"\/verify"/.test(ai) &&
+              ai.includes('require_internal_backend(x_volunserve_internal_key)'));
+            check('Restored Admin review UI and deployed Node agree on queue, evidence and decisions',
+              admin.includes('/api/admin/identity/reviews') &&
+              admin.includes('}/evidence') &&
+              admin.includes('}/decision') &&
+              node.includes('/api/admin/identity/reviews/:uid/evidence') &&
+              node.includes('/api/admin/identity/reviews/:uid/decision') &&
+              node.includes('response.json({ok:true, uid, verificationId: evidence.verificationId, ...signed})'));
+            const evidence=substring(node,'"/api/admin/identity/reviews/:uid/evidence"','"/api/admin/identity/reviews/:uid/decision"');
+            check('Deployed evidence viewer requires privileged Admin auth and denies expired links',
+              evidence.includes('requireFirebaseUser') &&
+              evidence.includes('requireOperationalAdmin') &&
+              evidence.includes('identity_evidence_expired') &&
+              evidence.includes('Cache-Control'));
+            check('ID-only OCR case cannot be directly verified by Admin without full face process',
+              node.includes('ocr_only_review_requires_rescan') &&
+              node.includes('verification.verificationMethod === "volunserve_ai_ocr_manual_review"') &&
+              admin.includes('selected.reviewTrack === "blurry_id_review"'));
+            const nativePrecheck=substring(native,'const openFaceScan =','const captureFace =');
+            check('QA native fix only opens selfie camera on passing ID precheck',
+              nativePrecheck.includes('if (result.outcome === "review") {') &&
+              nativePrecheck.includes('if (result.status === "pending") {') &&
+              nativePrecheck.includes('identityVerified: false') &&
+              nativePrecheck.includes('setStatusResult({') &&
+              nativePrecheck.indexOf('if (result.outcome === "review")') <
+                nativePrecheck.indexOf('setStep(2)'));
+            check('Deployed Node never automatically elevates a positive AI face response',
+              node.includes('const requiresManualReview = decision === "manual_review"') &&
+              node.includes('decision === "verified"') &&
+              node.includes('identityAttemptOutcome(decision, attempts)'));
+            core.summary.addHeading('Original AI six-source read-only contract PASS')
+              .addRaw('Pinned restored Hosting + deployed Node + deployed Python + isolated native QA fix. '+checks.length+' assertions passed. No live requests or writes.')
+              .write();
+            core.info('PASS: '+checks.length+' cross-service source contract assertions. NO DEPLOY.');
+# This workflow reads exact commit-pinned sources through read-only GitHub API.
+# No checkout, secrets, real media, network requests to production hosts,
+# Firebase/Cloudinary writes, Render deploys, or branch merges.
