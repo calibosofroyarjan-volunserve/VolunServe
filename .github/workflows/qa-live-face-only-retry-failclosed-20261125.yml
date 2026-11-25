@@ -37,6 +37,9 @@ jobs:
               get(context.sha,'backend/server.js')
             ]);
             const change=()=>x=>x.replace(
+              /      \/\/ The historical matcher returns "manual_review" for BOTH matched[\s\S]*?      \/\/ This affects ONLY the explicitly opted-in face-only route\.\n/,
+              ''
+            ).replace(
               /const decision = faceOnly[\s\S]*?const reviewTrack =/,
               'const decision = <RETRY_GATE>;\n      const reviewTrack ='
             ).replace(
