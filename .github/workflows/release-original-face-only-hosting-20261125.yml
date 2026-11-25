@@ -1,0 +1,164 @@
+name: Release Original National ID Face-Only UI to VolunServe Hosting (GUARDED)
+on:
+  push:
+    branches: [release/original-face-only-hosting-20261125]
+    paths: [.github/workflows/release-original-face-only-hosting-20261125.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-hosting-identity-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      PINNED_HOSTING_SHA: 5af28d279618dacd5eab518e5e0d52259eae8844
+      SITE: volunserve-3aa5b
+      BACKUP_CHANNEL: original-face-only-before-20261125
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: FAIL CLOSED on any out-of-scope changes from exact currently published site
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$PINNED_HOSTING_SHA" HEAD
+          git diff --check "$PINNED_HOSTING_SHA" HEAD
+          git diff --quiet "$PINNED_HOSTING_SHA" HEAD -- backend identity-ai functions firestore.rules firestore.indexes.json storage.rules package.json package-lock.json firebase.json app.json .firebaserc
+          node <<'JS'
+          const cp=require('node:child_process'),assert=require('node:assert/strict'),fs=require('node:fs');
+          const baseline=process.env.PINNED_HOSTING_SHA;
+          const changed=cp.execFileSync('git',['diff','--name-only',baseline,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-original-face-only-hosting-release-20261125.yml',
+            '.github/workflows/qa-original-ai-production-routes-20261125.yml',
+            '.github/workflows/release-original-face-only-hosting-20261125.yml',
+            'app/(admin)/identity-reviews.tsx',
+            'app/identity-verification.web.tsx',
+            'lib/identityVerification.ts'
+          ].sort(),'BLOCKED: unrelated/newer live features must never be overwritten');
+          const current=fs.readFileSync('app/identity-verification.web.tsx','utf8');
+          const old=cp.execFileSync('git',['show',baseline+':app/identity-verification.web.tsx'],{encoding:'utf8'});
+          const styles=x=>x.slice(x.lastIndexOf('const styles = StyleSheet.create('));
+          assert.equal(styles(current),styles(old),'BLOCKED: live green layout changed');
+          assert(current.includes('EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true"'));
+          assert(current.includes('Front of National ID')&&current.includes('Back of National ID'));
+          const admin=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+          assert(admin.includes('item.faceComparisonPassed === true'));
+          assert(admin.includes('issuerReviewAttested'));
+          const api=fs.readFileSync('lib/identityVerification.ts','utf8');
+          assert(api.includes('/api/identity/verify-face-only'));
+          console.log('PASS: original UI design, Admin attestation and only three identity source files changed');
+          JS
+      - name: Verify old Hosting revision is still LIVE before taking any action
+        run: VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA" node scripts/check-live-hosting.cjs
+      - name: Require LIVE Python/Node new endpoints to reject unauthorized calls; Cloudinary present
+        run: |
+          node <<'JS'
+          const cases=[
+            ["Python health","https://volunserve-identity-ai.onrender.com/health","GET",200],
+            ["Node health","https://volunserve.onrender.com/health","GET",200],
+            ["Original private Python match route","https://volunserve-identity-ai.onrender.com/verify-face-only","POST",401],
+            ["Original authenticated Node match route","https://volunserve.onrender.com/api/identity/verify-face-only","POST",401],
+            ["Original authenticated face health","https://volunserve.onrender.com/api/identity/face-engine-health","GET",401]
+          ];
+          (async()=>{
+            for(const [name,url,method,status] of cases){
+              let result;
+              for(let attempt=0;attempt<3;attempt++){
+                try{result=await fetch(url,{method,redirect:'error',signal:AbortSignal.timeout(55000)});break;}
+                catch(err){if(attempt===2)throw err;await new Promise(r=>setTimeout(r,5000));}
+              }
+              if(result.status!==status)throw Error('BLOCKED '+name+' expected '+status+' got '+result.status);
+              if(name==='Node health'){
+                const data=await result.json();
+                if(data.ok!==true||data.assistanceEvidenceStorage!=='secure_cloudinary_configured')
+                  throw Error('BLOCKED: existing production Cloudinary is not configured');
+              }
+              if(name==='Python health'){
+                const data=await result.json();
+                if(data.ok!==true||data.verificationEngineReady!==true||data.internalAuthConfigured!==true)
+                  throw Error('BLOCKED: original AI service not ready');
+              }
+              console.log('PASS:',name,result.status);
+            }
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          JS
+      - name: Install exact dependency lockfile, check TypeScript and regression scope
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Export production-original face-only Expo site and verify release marker
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'JS'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const r=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(r.revision,process.env.GITHUB_SHA);
+          assert.equal(r.firebaseProject,'volunserve-3aa5b');
+          console.log('PASS: correct exact Hosting build commit and Firebase project');
+          JS
+      - name: Verify existing production Hosting service-account without printing its contents
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::Production Hosting credential missing; no deployment"; exit 1; }
+          node <<'JS'
+          const fs=require('node:fs');
+          const o=JSON.parse(process.env.FIREBASE_SA);
+          if(o.type!=='service_account'||o.project_id!=='volunserve-3aa5b'||!o.private_key||!o.client_email)
+            throw Error('Invalid/wrong project Hosting credential; no deployment');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/original-ai-hosting-prod.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS: existing Hosting credential targets intended Firebase project');
+          JS
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/original-ai-hosting-prod.json" >> "$GITHUB_ENV"
+      - name: Recheck unchanged live Hosting, create BACKUP, deploy ONLY Hosting, verify or ROLLBACK
+        shell: bash
+        run: |
+          set -euo pipefail
+          export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
+          node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:clone "$SITE:live" "$SITE:$BACKUP_CHANNEL" --project "$SITE" --non-interactive
+          echo "BACKUP_DONE: Existing VolunServe Hosting cloned before any changes"
+          ROLLBACK_REQUIRED=0
+          if ! npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive; then
+            ROLLBACK_REQUIRED=1
+          fi
+          if [ "$ROLLBACK_REQUIRED" = 0 ]; then
+            export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
+            SUCCESS=0
+            for attempt in 1 2 3 4 5 6; do
+              if node scripts/check-live-hosting.cjs; then SUCCESS=1;break;fi
+              sleep 12
+            done
+            if [ "$SUCCESS" = 1 ]; then
+              echo "RELEASE_SUCCESS: Original face-only UI deployed; other live modules untouched."
+              exit 0
+            fi
+            ROLLBACK_REQUIRED=1
+          fi
+          if [ "$ROLLBACK_REQUIRED" = 1 ]; then
+            echo "::error::Original AI Hosting verification failed; restoring previous Hosting from backup."
+            npx firebase-tools hosting:clone "$SITE:$BACKUP_CHANNEL" "$SITE:live" --project "$SITE" --non-interactive || echo "::error::Hosting rollback failed; manual restoration required"
+            export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
+            node scripts/check-live-hosting.cjs || true
+            exit 1
+          fi
