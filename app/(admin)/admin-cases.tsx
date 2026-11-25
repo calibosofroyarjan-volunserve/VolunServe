@@ -3806,9 +3806,6 @@ export default function AdminCases() {
           const eligibleVolunteerCount = approvedVolunteers.filter(
             (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
           ).length;
-          const eligibleVolunteerCandidates = volunteerCandidates.filter(
-            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
-          );
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
 
@@ -5744,7 +5741,6 @@ export default function AdminCases() {
                   eligibleCount={eligibleVolunteerCount}
                   activeAssignments={activeAssignments}
                   allAssignments={incidentAssignments}
-                  automaticStatus={incident.autoVolunteerDispatch?.state}
                   onCancelAssignment={(item) => {
                     const savedAssignment = activeAssignments.find(
                       (assignment) => assignment.id === item.id,
@@ -5779,19 +5775,19 @@ export default function AdminCases() {
               )}
               {detailTab === "personnel" && dispatchReady &&
                 ["validated", "assigned", "in_progress"].includes(incident.status) &&
-                eligibleVolunteerCount > 0 && volunteerSupportAvailable && (
+                volunteerSupportAvailable && (
                 <View style={styles.personnelReferenceLayout}>
                   <View style={styles.personnelCleanCard}>
                     <View style={styles.personnelCleanHeader}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.personnelCleanTitle}>Available Qualified Volunteers</Text>
+                        <Text style={styles.personnelCleanTitle}>Volunteer Directory — Manual Assignment</Text>
                         <Text style={styles.personnelCleanSubtitle}>
-                          Send an offer to an approved local Volunteer. A Volunteer must accept before starting a task.
+                          Choose an eligible, approved Volunteer to send a task offer. Ineligible profiles remain visible but cannot be assigned.
                         </Text>
                       </View>
                     </View>
                     <View style={styles.personnelVolunteerToolbar}>
-                      <Text style={styles.personnelListHeading}>Local Volunteers</Text>
+                      <Text style={styles.personnelListHeading}>Approved Volunteers</Text>
                       <View style={styles.personnelVolunteerFilters}>
                         <TextInput
                           style={styles.personnelCompactFilter}
@@ -5809,14 +5805,14 @@ export default function AdminCases() {
                         />
                       </View>
                     </View>
-                    {eligibleVolunteerCandidates.length === 0 ? (
+                    {volunteerCandidates.length === 0 ? (
                       <Text style={styles.personnelCleanEmptyText}>
-                        No qualified Volunteers match the current search filters. Clear the filters to see available local Volunteers.
+                        {volunteerDirectoryState === "loading" ? "Loading approved Volunteers..." : volunteerDirectoryState === "error" ? "Could not load the Volunteer directory. Check Firestore permissions." : approvedVolunteers.length === 0 ? "No approved Volunteers are available. Approve a Volunteer account first." : "No Volunteers match these filters. Clear the search to see the directory."}
                       </Text>
                     ) : (
                       <View style={styles.personnelCompactList}>
-                        <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(eligibleVolunteerCandidates.length / 5) || 1))} total={eligibleVolunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
-                          {pageFive(eligibleVolunteerCandidates, volunteerPage).map((volunteer) => {
+                        <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(volunteerCandidates.length / 5) || 1))} total={volunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
+                          {pageFive(volunteerCandidates, volunteerPage).map((volunteer) => {
                             const key = `${incident.id}_${volunteer.uid}`;
                             const eligibility = volunteerEligibilityForCase(incident, volunteer);
                             const caseOpenForSupport = ["validated", "assigned", "in_progress"].includes(
@@ -5852,6 +5848,9 @@ export default function AdminCases() {
                                   <Text style={styles.personnelCompactMeta}>
                                     {barangayDisplay(volunteer.barangay)}
                                   </Text>
+                                  {!eligibility.eligible && (
+                                    <Text style={styles.personnelCompactMeta}>{eligibility.reason}</Text>
+                                  )}
                                 </View>
 
                                 <View style={styles.personnelCompactChipRowWide}>
