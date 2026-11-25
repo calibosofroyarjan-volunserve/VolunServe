@@ -1,0 +1,141 @@
+name: Original AI Staging Isolation and Release Readiness AUDIT (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-live-parity-20261125
+    paths:
+      - .github/workflows/qa-original-ai-staging-readiness-audit-no-deploy-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    name: Read-only isolation policy and source-parity evidence (not a release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Evaluate pinned staged/live code and fail-closed staging project policy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // This QA job never loads Render credentials or starts a deployed service.
+            // The SHA values below are read-only Render active deploy refs
+            // independently verified Nov 25, 2026.
+            const {owner,repo}=context.repo;
+            const refs={
+              liveNode:'d06aeb1e0a572bf8581a99d7064da0a8d2430ed4',
+              liveAI:'319152e6a1cad5e54653c20e87bd1551a82b219e',
+              stagingNode:'353879c0ce8c566e71c1a3263ccce77e82459013',
+              stagingAI:'93c82384ded112210902ed815454265beebe96e0',
+            };
+            const read=async(path,ref,optional=false)=>{
+              try{
+                const {data}=await github.rest.repos.getContent({owner,repo,path,ref});
+                if(Array.isArray(data)||data.encoding!=='base64')
+                  throw Error('Source is not an expected UTF-8 file: '+path);
+                return Buffer.from(data.content,'base64').toString('utf8');
+              }catch(e) {
+                if(optional&&e.status===404)return null;
+                throw e;
+              }
+            };
+            const [policy,stagingFirebase,stagingBackend,stagingAI,liveBackend,liveAI,
+              stagingPrivate,livePrivate,stagingSelected]=await Promise.all([
+              read('backend/stagingFirebaseIsolationPolicy.js',refs.stagingNode),
+              read('backend/firebaseAdmin.js',refs.stagingNode),
+              read('backend/server.js',refs.stagingNode),
+              read('identity-ai/main.py',refs.stagingAI),
+              read('backend/server.js',refs.liveNode),
+              read('identity-ai/main.py',refs.liveAI),
+              read('backend/identityPrivateEvidence.js',refs.stagingNode,true),
+              read('backend/identityPrivateEvidence.js',refs.liveNode),
+              read('backend/selectedIdPolicy.js',refs.stagingNode,true),
+            ]);
+            const assert=require('node:assert/strict');
+            const findings=[];
+            const pass=(label,ok,details='')=>{
+              findings.push({label,ok,details});
+              core.info((ok?'PASS: ':'BLOCKED: ')+label+(details?' — '+details:''));
+            };
+            // Test the real deployed staging policy with fabricated, nonsecret
+            // environment names and fake service-account PROJECT IDS only.
+            const fakeModule={exports:{}};
+            const evaluate=new Function('module','exports',policy);
+            evaluate(fakeModule,fakeModule.exports);
+            const guard=fakeModule.exports.assertIsolatedStagingFirebase;
+            assert.equal(typeof guard,'function');
+            const baseline={
+              RENDER_SERVICE_NAME:'volunserve-backend-staging',
+              VOLUNSERVE_STAGING_STRICT:'true',
+              VOLUNSERVE_DEPLOYMENT_ENV:'staging',
+              VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:'demo-volunserve-staging-isolated',
+              IDENTITY_AI_SERVICE_URL:'https://volunserve-identity-ai-staging.onrender.com',
+            };
+            const account={project_id:'demo-volunserve-staging-isolated'};
+            assert.doesNotThrow(()=>guard(baseline,account));
+            const deny=[
+              ['strict mode missing',{VOLUNSERVE_STAGING_STRICT:''},account],
+              ['deployment mode not staging',{VOLUNSERVE_DEPLOYMENT_ENV:''},account],
+              ['production Firebase ID',{VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:'volunserve-3aa5b'},account],
+              ['production service-account project ID',{}, {project_id:'volunserve-3aa5b'}],
+              ['Firebase service account/project mismatch',{}, {project_id:'demo-other-staging-project'}],
+              ['Firebase service account absent',{}, null],
+              ['staging project ID empty',{VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:''},account],
+              ['production AI URL',{IDENTITY_AI_SERVICE_URL:'https://volunserve-identity-ai.onrender.com'},account],
+              ['missing AI URL',{IDENTITY_AI_SERVICE_URL:''},account]
+            ];
+            for(const [reason,overrides,credential] of deny)
+              assert.throws(()=>guard({...baseline,...overrides},credential),
+                /isolation blocked/i,'Must reject '+reason);
+            pass('Staging guard rejects 9 unsafe scenarios; accepts separate demo project and staging AI URL',true);
+            assert.match(stagingFirebase,/assertIsolatedStagingFirebase\(process\.env,\s*serviceAccount\)/);
+            assert.ok(stagingFirebase.indexOf('assertIsolatedStagingFirebase(process.env, serviceAccount)')<
+                      stagingFirebase.indexOf('return initializeApp('));
+            pass('Staging Firebase Admin initialization calls guard before SDK initializeApp',true);
+            const liveIds=['national_id','drivers_license','passport','umid','prc_id'];
+            const getIds=text=>{
+              const body=text.match(/ACCEPTED_ID_TYPES\s*=\s*\{([^}]*)\}/);
+              assert.ok(body,'Expected explicit ID allowlist');
+              return [...body[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);
+            };
+            const allowedLive=getIds(liveAI);
+            const allowedStaging=getIds(stagingAI);
+            assert.deepEqual(allowedLive,liveIds,'Live AI baseline changed unexpectedly');
+            pass('Staging Python government ID set matches current live 5-ID allowlist',
+              JSON.stringify(allowedLive)===JSON.stringify(allowedStaging),
+              'current staging='+allowedStaging.join(', '));
+            pass('Staging Node includes current private identity evidence parser/storage library',
+              !!stagingPrivate && !!livePrivate,
+              stagingPrivate?'staging helper found':'staging helper absent');
+            pass('Staging Node contains current ID decision selected-ID policy',
+              !!stagingSelected,stagingSelected?'present':'not present');
+            pass('Staging Node includes current private consented evidence routes',
+              stagingBackend.includes('/api/admin/identity/reviews/:uid/evidence') &&
+              stagingBackend.includes('/api/identity/verify-with-evidence') &&
+              stagingBackend.includes('/api/identity/document/precheck-with-evidence') &&
+              liveBackend.includes('/api/admin/identity/reviews/:uid/evidence'),
+              'requires admin evidence viewer and private consent routes');
+            // Neither a separate Render environment nor the guard proves
+            // independent CLOUDINARY_* values. These vars are not retrieved.
+            pass('Independent staged Firebase service account identity verified at runtime',
+              false,'credentials intentionally inaccessible to read-only audit');
+            pass('Independent staged Cloudinary cloud/account credential verified',
+              false,'no read-only attestation or separate Cloudinary guard');
+            const releaseReady=findings.every(x=>x.ok);
+            assert.equal(releaseReady,false,
+              'This pinned staging baseline is known to lack live evidence routes');
+            const yesNo=ok=>ok?'PASS':'BLOCKED';
+            core.summary.addHeading('VolunServe original AI — READ-ONLY staging readiness AUDIT');
+            core.summary.addRaw('**Outcome: BLOCKED (not ready for hosted biometric/media E2E).**\n\n',true);
+            core.summary.addRaw('Existing Render services use different environment IDs, but this DOES NOT establish Firebase/Cloudinary isolation.\n\n',true);
+            core.summary.addTable([
+              [{data:'Verification',header:true},{data:'Status',header:true},{data:'Evidence',header:true}],
+              ...findings.map(f=>[f.label,yesNo(f.ok),f.details||'pinned deployed code simulation'])
+            ]);
+            core.summary.addRaw('\nNo deployment, no app source writes, no test accounts, no cloud credentials, no media uploads.\n\n',true);
+            core.summary.addRaw('Needed before E2E: prove **separate Firebase service account project ID** and **separate Cloudinary account**, then integrate current protected Node/Python/Hosting sources into dedicated staging **without touching production**. Use a fresh scoped staging candidate, not an old restoration PR.\n',true);
+            await core.summary.write();
+            core.setOutput('release_ready','false');
+            core.info('AUDIT COMPLETE — HOSTED E2E BLOCKED. No deployed services were called.');
+# This audit intentionally succeeds when it correctly exposes blockers.
+# It is NOT a promotion, readiness approval, deployment or production gate bypass.
