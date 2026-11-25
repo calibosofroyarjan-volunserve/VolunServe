@@ -155,12 +155,13 @@ export default function MapTracking() {
   const lastEmergencyGpsSyncRef = useRef(0);
 
   const [location, setLocation] = useState<UserLocation | null>(null);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const focusedIncident = focusedCaseId ? incidents.find(item => item.id === focusedCaseId) : null;
   const arrival = emergencyArrivalAssessment(
     location,
     focusedIncident ? { latitude: focusedIncident.latitude, longitude: focusedIncident.longitude } : null,
   );
+
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const focusedIncident = focusedCaseId ? incidents.find(item => item.id === focusedCaseId) : null;
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
@@ -281,7 +282,6 @@ export default function MapTracking() {
   // while a focused, accepted task is actually Responding or On Site.
   // A completed/declined/cancelled task is never treated as live.
   useEffect(() => {
-    const previous = activeEmergencyTaskRef.current;
     activeEmergencyTaskRef.current = null;
     setActiveEmergencyTask(null);
     if (!CURRENT_USER_ID || userRole !== "volunteer" || !focusedCaseId) return;
