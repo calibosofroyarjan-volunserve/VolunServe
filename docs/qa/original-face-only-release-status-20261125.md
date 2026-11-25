@@ -8,9 +8,9 @@ Production release snapshots were built from *divergent histories*, so do **not*
 
 | Surface | Exact currently deployed/public source commit (read-only) | Selected QA candidate (NOT DEPLOYED) |
 | --- | --- | --- |
-| Render Node | `d06aeb1e0a572bf8581a99d7064da0a8d2430ed4` | `2e3af19a9c2c539a60cc2e3079dd57e85c7108aa` |
-| Render Python AI | `319152e6a1cad5e54653c20e87bd1551a82b219e` | `e9f92fedeab95eca769ebf379992c90b3dfd00e0` |
-| Published Hosting web | `5af28d279618dacd5eab518e5e0d52259eae8844` | `50b384900b8235b7fd3d6220a85ca2c682d37a49` |
+| Render Node | `d06aeb1e0a572bf8581a99d7064da0a8d2430ed4` | `9ac3f9401c13a2807fd055de49ec26c71f13635f` |
+| Render Python AI | `319152e6a1cad5e54653c20e87bd1551a82b219e` | `d3320ccef20bd87b98cecc8885da5ab7fa57809e` |
+| Published Hosting web | `5af28d279618dacd5eab518e5e0d52259eae8844` | `3063dacba2f27cd41a70b7e320d3fe30e988396a` |
 
 **QA-only cross-service workflow:** `.github/workflows/qa-original-face-only-cross-snapshots-20261125.yml`. It checks out the three refs separately and runs source-diff scope checks, the original historical matching-function equality check, the exact published stylesheet equality check, Python synthetic security/face-only tests, Node private consented evidence/Admin tests, a local mocked-HTTP Node→Python result contract test, and the real Hosting web TypeScript check. **No hosted uploads, real biometrics, production Firebase writes, or Cloudinary calls**.
 
@@ -19,9 +19,9 @@ Production release snapshots were built from *divergent histories*, so do **not*
 1. Basic Resident supplies their own **National ID front portrait** and optionally the ID back (no text OCR). The camera/file input never presumes ID issuance is authentic. Explicit private-evidence consent applies to both front/optional back and the next selfie.
 2. Resident captures a selfie. The original `run_face_verification` face-landmark similarity implementation is preserved byte-for-byte. It is not validated liveness/anti-spoofing, and its score is not a calibrated identity probability.
 3. The authenticated web client calls Node `POST /api/identity/verify-face-only`. This route is **disabled by default** unless Node's explicit `VOLUNSERVE_FACE_ONLY_ENABLED=true` is set on the intended service. Node forwards media to Python `POST /verify-face-only` with the matching private `IDENTITY_AI_INTERNAL_KEY`; the dedicated `GET /api/identity/face-engine-health` checks private authentication without OCR readiness.
-4. Python only permits the declared `national_id` type. It returns preliminary `decision="manual_review"` even when the face score crosses the historical threshold, so Node must persist `pending` + `requiresManualReview`; not `identityVerified=true`.
+4. Python only permits the declared `national_id` type. **The October matcher returns `decision="manual_review"` BOTH for above-threshold face comparisons AND uncertain/low-similarity cases.** The unchanged function includes `matchThreshold` only when the comparison succeeds. The private `/verify-face-only` route now exposes explicit `faceComparisonPassed=true` ONLY for a genuine above-threshold match with numeric validated score and threshold; all other cases are false. Node persists `pending` and `requiresManualReview` with a fail-closed boolean, never `identityVerified=true`.
 5. Node retains only consented ID/selfie evidence in private **authenticated** Cloudinary assets and returns only metadata to regular clients; only authorized Admin can access short-lived signed view links.
-6. Authorized operational Admin compares the photos and independently verifies that the presented physical ID is genuinely valid before approving; issuer validation method, attestation, and privacy-safe notes are required and audited. **A preliminary AI face match alone must never promote the Resident**.
+6. Authorized operational Admin can approve only when **faceComparisonPassed === true**, retained private evidence is present, and the Admin independently verifies that the presented physical ID is genuinely valid; issuer validation method, attestation, and privacy-safe notes are required and audited. **An uncertain result that also says `manual_review` is NOT sufficient for approval; request a retry. A preliminary AI face match alone must never promote the Resident.**
 7. School/employee/other unsupported IDs **cannot be reliably rejected by a face-only algorithm** based on the printed/card type. The declared type is restricted, but manual Admin inspection is necessary. Never claim this setup automatically authenticates a government ID.
 
 ## Hard blockers before any real hosted ID/selfie test or live switch
