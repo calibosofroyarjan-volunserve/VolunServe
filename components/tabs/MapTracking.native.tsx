@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -30,6 +31,7 @@ import {
 import MapView, { Marker, Callout, Polyline, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
+import { emergencyArrivalAssessment } from "../../lib/emergencyArrival";
 import { isVerifiedActiveCenter, isRecentShelterReport, vehicleInfo } from "../../lib/emergencyMapTypes";
 import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmOutsideMask, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
@@ -45,6 +47,8 @@ import {
 type UserLocation = {
   latitude: number;
   longitude: number;
+  accuracy?: number | null;
+  timestamp?: number;
 };
 
 type IncidentSeverity = "low" | "medium" | "high" | "critical";
@@ -56,6 +60,12 @@ type IncidentStatus =
   | "resolved"
   | "closed";
 type VolunteerStatus = "available" | "responding" | "offline";
+
+type ActiveEmergencyTask = {
+  id: string;
+  caseId: string;
+  status: "responding" | "on_site";
+};
 
 type Incident = {
   id: string;
@@ -140,10 +150,19 @@ export default function MapTracking() {
     user?.displayName ?? user?.email ?? "Resident User";
 
   const [userRole, setUserRole] = useState<"resident" | "volunteer">("resident");
+  const [activeEmergencyTask, setActiveEmergencyTask] = useState<ActiveEmergencyTask | null>(null);
+  const activeEmergencyTaskRef = useRef<ActiveEmergencyTask | null>(null);
+  const lastEmergencyGpsSyncRef = useRef(0);
 
   const [location, setLocation] = useState<UserLocation | null>(null);
+
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const focusedIncident = focusedCaseId ? incidents.find(item => item.id === focusedCaseId) : null;
+  const arrival = emergencyArrivalAssessment(
+    location,
+    focusedIncident ? { latitude: focusedIncident.latitude, longitude: focusedIncident.longitude } : null,
+  );
+
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
@@ -259,6 +278,38 @@ export default function MapTracking() {
       });
   }, [CURRENT_USER_ID]);
 
+
+  // Read only the current Volunteer's assignments. Case GPS is published only
+  // while a focused, accepted task is actually Responding or On Site.
+  // A completed/declined/cancelled task is never treated as live.
+  useEffect(() => {
+    activeEmergencyTaskRef.current = null;
+    setActiveEmergencyTask(null);
+    if (!CURRENT_USER_ID || userRole !== "volunteer" || !focusedCaseId) return;
+
+    const assignmentsQuery = query(
+      collection(db, "responseAssignments"),
+      where("volunteerId", "==", CURRENT_USER_ID),
+    );
+    return onSnapshot(assignmentsQuery, (snapshot) => {
+      const next = snapshot.docs
+        .map(item => ({ id: item.id, ...item.data() } as ActiveEmergencyTask))
+        .find(item => item.caseId === focusedCaseId &&
+          ["responding", "on_site"].includes(String(item.status))) || null;
+      const previousTask = activeEmergencyTaskRef.current;
+      activeEmergencyTaskRef.current = next;
+      setActiveEmergencyTask(next);
+      if (previousTask && !next) {
+        // Best-effort cleanup; map readers independently hide stale and
+        // no-longer-active assignment locations.
+        void deleteDoc(doc(db, "responseLocations", CURRENT_USER_ID)).catch(() => {});
+      }
+    }, () => {
+      activeEmergencyTaskRef.current = null;
+      setActiveEmergencyTask(null);
+      setLocationError("Could not verify the active Volunteer response assignment.");
+    });
+  }, [CURRENT_USER_ID, userRole, focusedCaseId]);
 
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const lastSyncRef = useRef(0);
@@ -619,6 +670,14 @@ export default function MapTracking() {
       }
 
       watchingRef.current = false;
+      // This map owns only foreground, case-specific Volunteer GPS sharing.
+      // Best-effort revoke the pin when the map is closed; readers also
+      // enforce task status and freshness in case the device is offline.
+      const activeTask = activeEmergencyTaskRef.current;
+      activeEmergencyTaskRef.current = null;
+      if (activeTask && CURRENT_USER_ID) {
+        void deleteDoc(doc(db, "responseLocations", CURRENT_USER_ID)).catch(() => {});
+      }
 
       firestoreUnsubscribersRef.current.forEach((unsubscribe) => {
         try {
@@ -773,6 +832,8 @@ export default function MapTracking() {
           initialLocation = {
             latitude: lastKnown.coords.latitude,
             longitude: lastKnown.coords.longitude,
+            accuracy: lastKnown.coords.accuracy,
+            timestamp: lastKnown.timestamp,
           };
 
           setLocation(initialLocation);
@@ -789,6 +850,8 @@ export default function MapTracking() {
         initialLocation = {
           latitude: current.coords.latitude,
           longitude: current.coords.longitude,
+          accuracy: current.coords.accuracy,
+          timestamp: current.timestamp,
         };
 
         setLocation(initialLocation);
@@ -841,6 +904,8 @@ export default function MapTracking() {
           const updatedLoc = {
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            timestamp: pos.timestamp,
           };
 
           setLocation(updatedLoc);
@@ -882,6 +947,29 @@ export default function MapTracking() {
       const role = userRoleRef.current;
 
       if (role === "volunteer") {
+        const responseTask = activeEmergencyTaskRef.current;
+        if (responseTask && CURRENT_USER_ID) {
+          const now = Date.now();
+          if (now - lastEmergencyGpsSyncRef.current >= 10000 &&
+            Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude) &&
+            (!coords.timestamp || now - coords.timestamp <= 30000)) {
+            lastEmergencyGpsSyncRef.current = now;
+            try {
+              await setDoc(doc(db, "responseLocations", CURRENT_USER_ID), {
+                volunteerId: CURRENT_USER_ID,
+                assignmentId: responseTask.id,
+                caseId: responseTask.caseId,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                accuracy: typeof coords.accuracy === "number" ? coords.accuracy : null,
+                updatedAt: serverTimestamp(),
+              });
+            } catch (error) {
+              console.log("Case-specific Volunteer GPS publish error:", error);
+              // Keep the last-known map position; never invent live tracking.
+            }
+          }
+        }
         const volunteerRef = doc(
           db,
           "volunteers_live_locations",
@@ -1359,6 +1447,25 @@ export default function MapTracking() {
           ) : null}
         </View>
       </SafeAreaView>
+
+      {userRole === "volunteer" && focusedCaseId && activeEmergencyTask && (
+        <View style={{paddingHorizontal:16,paddingVertical:10,backgroundColor:"#EFF8F3"}}>
+          <Text style={{fontSize:13,fontWeight:"700",color:"#14532D"}}>
+            {arrival.status === "near"
+              ? "Near destination (approximately 100 m). Tap Mark On Site in Volunteer Tasks once you have actually arrived."
+              : arrival.status === "en_route" && arrival.distanceMeters != null
+                ? `GPS distance to saved incident: about ${Math.round(arrival.distanceMeters)} m (straight line)`
+                : arrival.status === "stale"
+                  ? "GPS reading is outdated. Arrival not confirmed."
+                  : arrival.status === "low_accuracy"
+                    ? "GPS accuracy too low for the 100 m indicator. Confirm arrival manually."
+                    : "Waiting for a fresh GPS reading and valid incident pin."}
+          </Text>
+          <Text style={{fontSize:11,color:"#47675C",marginTop:3}}>
+            Proximity is informational only, not proof that assistance was delivered. Resident confirms help separately.
+          </Text>
+        </View>
+      )}
 
       {/* =====================================================
           MAP
