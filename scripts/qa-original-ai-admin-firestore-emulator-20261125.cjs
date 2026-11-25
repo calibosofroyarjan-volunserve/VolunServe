@@ -163,7 +163,7 @@ const modules=[
   section("async function requireOperationalAdmin(","function isVerifiedLguPersonnelProfile("),
   section("function identityAttemptCount(","const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT"),
   section("function getIdentityAiEndpoint(","function getIdentityAiHeaders("),
-  getRoute("get","/api/identity/engine-health","/api/identity/status"),
+  section('app.get(\n  "/api/identity/engine-health"', "// Authenticated OCR-only document precheck BEFORE webcam/selfie collection."),
   section("function identityAdminTimestampIso(","app.get(\n  \"/api/admin/identity/reviews\""),
   getRoute("get","/api/admin/identity/reviews","/api/admin/identity/reviews/:uid/evidence"),
   getRoute("get","/api/admin/identity/reviews/:uid/evidence","/api/admin/identity/reviews/:uid/decision"),
