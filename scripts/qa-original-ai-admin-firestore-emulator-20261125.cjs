@@ -39,7 +39,12 @@ const source = fs.readFileSync(path.join(__dirname,"backend","server.js"),"utf8"
 const {isVerifiedFirebaseToken,isCompletedVolunServeProfile} =
   require("./backend/verifiedFirebaseToken");
 const {isOperationalAdminProfile} = require("./backend/adminAccess");
-const {selectedIdRecognized} = require("./backend/selectedIdPolicy");
+const {
+  selectedIdRecognized, enforceSelectedIdDecision, classifyIdentityReviewTrack
+} = require("./backend/selectedIdPolicy");
+const {classifyHybridDocumentPrecheck} = require("./backend/identityHybridPrecheckDecision");
+const {assessAutomaticIdentityApproval} = require("./backend/identityAutoApprovalGateway");
+const crypto = require("node:crypto");
 const {probeIdentityAiReadiness: liveProbeIdentityAiReadiness} =
   require("./backend/identityAiReadiness");
 const {reviewIssuerEvidence} = require("./backend/identityIssuerReviewPolicy");
@@ -95,6 +100,21 @@ const cloudinary={
   }
 };
 function configureCloudinary(){ /* Fake only, no real service or credentials. */ }
+// All upstream ID-AI responses here are fabricated. The production Node
+// routes remain exact; the private Python service is NOT contacted.
+let nextPrecheckAi=null;
+let nextFaceAi=null;
+let residentAiCalls=[];
+async function callIdentityAiService(request,options={}){
+  assert.ok(Buffer.isBuffer(request.body) && request.body.length>0);
+  assert.equal(request.identityExpectedName.firstName,"Synthetic");
+  assert.equal(request.identityExpectedName.lastName,"QA");
+  residentAiCalls.push({uid:request.firebaseUser.uid,precheck:!!options.documentPrecheck});
+  const result=options.documentPrecheck?nextPrecheckAi:nextFaceAi;
+  assert.ok(result,"QA must explicitly configure an AI response");
+  if(result instanceof Error)throw result;
+  return structuredClone(result);
+}
 const app = express();
 app.disable("x-powered-by");
 
@@ -168,6 +188,10 @@ const modules=[
   getRoute("get","/api/admin/identity/reviews","/api/admin/identity/reviews/:uid/evidence"),
   getRoute("get","/api/admin/identity/reviews/:uid/evidence","/api/admin/identity/reviews/:uid/decision"),
   getRoute("post","/api/admin/identity/reviews/:uid/decision","/api/admin/assistance/requests/:requestId/start-review"),
+  section("function normalizeAiDecision(","function normalizeIdDocumentScreening("),
+  section('function diditCleanupFields()', 'app.get(\n  "/health"'),
+  section("const IDENTITY_DOC_PRECHECK_COOLDOWN_MS","app.get(\n  \"/api/identity/status\""),
+  section('app.post(\n  ["/api/identity/verify"', "function identityAdminTimestampIso("),
 ];
 assert.ok(modules[7].includes("probeIdentityAiReadiness({") &&
           modules[7].includes("requireFirebaseUser") &&
@@ -176,8 +200,11 @@ assert.ok(modules[7].includes("probeIdentityAiReadiness({") &&
           modules[10].includes("identity_evidence_expired") &&
           modules[11].includes("self_identity_review_forbidden") &&
           modules[11].includes("reviewIssuerEvidence(") &&
-          modules[11].includes("db.runTransaction("),
-  "Refusing test of detached or substituted Admin logic");
+          modules[11].includes("db.runTransaction(") &&
+          modules[14].includes("identity_evidence_consent_required") &&
+          modules[15].includes("identityAttemptOutcome(decision, attemptCount)") &&
+          modules[15].includes("automaticVerificationEligible"),
+  "Refusing test of detached or substituted Admin/Resident logic");
 // Use the SAME JavaScript Promise realm as Firestore Admin SDK.
 // The Firestore SDK requires its transaction callback to return a native
 // Promise; vm.runInNewContext creates cross-realm promises and falsely fails.
@@ -186,7 +213,13 @@ const dependencyNames=[
   "isVerifiedFirebaseToken","isCompletedVolunServeProfile",
   "isOperationalAdminProfile","selectedIdRecognized","reviewIssuerEvidence",
   "signedIdentityEvidence","cloudinary","configureCloudinary",
-  "probeIdentityAiReadiness","process"
+  "probeIdentityAiReadiness","process",
+  "crypto","express","callIdentityAiService","classifyHybridDocumentPrecheck",
+  "enforceSelectedIdDecision","classifyIdentityReviewTrack",
+  "assessAutomaticIdentityApproval","parseConsentedIdentityEvidence",
+  "uploadIdentityEvidence","destroyIdentityEvidence",
+  "identityEvidenceRetentionDate","IDENTITY_UPLOAD_LIMIT",
+  "IDENTITY_RETRY_DELAY_MS","IDENTITY_PROCESSING_LEASE_MS"
 ];
 const installRoutes = new Function(...dependencyNames,modules.join("\n"));
 installRoutes(
@@ -194,7 +227,12 @@ installRoutes(
   isVerifiedFirebaseToken,isCompletedVolunServeProfile,
   isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence,
   signedIdentityEvidence,cloudinary,configureCloudinary,
-  probeIdentityAiReadiness,process
+  probeIdentityAiReadiness,process,
+  crypto,express,callIdentityAiService,classifyHybridDocumentPrecheck,
+  enforceSelectedIdDecision,classifyIdentityReviewTrack,
+  assessAutomaticIdentityApproval,parseConsentedIdentityEvidence,
+  uploadIdentityEvidence,destroyIdentityEvidence,identityEvidenceRetentionDate,
+  "32mb",8000,3*60*1000
 );
 
 const adminUid="synthetic_admin_20261125";
@@ -361,6 +399,181 @@ async function run() {
     pass("Nine readiness failures/successes consume zero verification attempts, zero uploads or user writes");
     delete process.env.IDENTITY_AI_SERVICE_URL;
     delete process.env.IDENTITY_AI_INTERNAL_KEY;
+
+
+    // Full Resident document-only precheck and ID+selfie handler tests:
+    // the **exact deployed Node Express route bodies** run against
+    // isolated Firebase Auth/Firestore, mocked Python AI and Cloudinary.
+    const residentPng=Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9m9G0AAAAASUVORK5CYII=",
+      "base64");
+    const reviewImages=async(token,route,{selfie=false,consent=true,precheckConsent=true}={})=>{
+      const form=new FormData();
+      form.set("idType","national_id");
+      if(consent)form.set("identityEvidenceConsent","true");
+      for(const field of ["idDocument","idBackDocument",...(selfie?["selfie"]:[])])
+        form.set(field,new Blob([residentPng],{type:"image/png"}),field+".png");
+      // Any untrusted form name/DOB must not override the saved profile.
+      form.set("firstName","FORGED-FRONTEND-NAME");
+      form.set("dateOfBirth","1950-01-01");
+      const headers={};
+      if(token)headers.authorization="Bearer "+token;
+      if(precheckConsent)headers["X-VolunServe-Document-Precheck-Consent"]="true";
+      const res=await fetch("http://127.0.0.1:"+server.address().port+route,{
+        method:"POST",headers,body:form
+      });
+      return {status:res.status,body:await res.json(),cacheControl:res.headers.get("cache-control")};
+    };
+    const docRoute="/api/identity/document/precheck-with-evidence";
+    const faceRoute="/api/identity/verify-with-evidence";
+    const baselineScreen={
+      ...validScreening,
+      profileNameCheck:"possible_match",
+      profileBirthDateCheck:"possible_match",
+      profileAddressCheck:"possible_match",
+      warningCodes:[],
+    };
+    const faceStatus=uid=>db.collection("identityVerifications").doc(uid);
+    const faceMedia=uid=>db.collection("identityPrivateEvidence").doc(uid);
+    const prepAttempts=uid=>db.collection("identityVerificationAttempts").where("uid","==",uid).get();
+    const precheckPassToken=await makeAccount("synthetic_doc_precheck_pass_20261125","resident","approved");
+    nextPrecheckAi={outcome:"pass",documentScreening:baselineScreen};
+    let resident=await reviewImages(null,docRoute,{selfie:false});
+    assert.equal(resident.status,401);
+    assert.equal(residentAiCalls.length,0);
+    pass("Resident document precheck requires Firebase sign-in before any AI request");
+    resident=await reviewImages(precheckPassToken,docRoute,{selfie:false,precheckConsent:false});
+    assert.equal(resident.status,400);
+    assert.equal(resident.body.error,"document_precheck_consent_required");
+    assert.equal(residentAiCalls.length,0);
+    pass("Missing preliminary ID processing consent blocked; zero AI attempts");
+    resident=await reviewImages(precheckPassToken,docRoute,{selfie:false});
+    assert.equal(resident.status,200,JSON.stringify(resident.body));
+    assert.equal(resident.body.outcome,"pass");
+    assert.equal(resident.body.decision,"ready_for_face_scan");
+    assert.equal(resident.body.authenticityVerified,false);
+    assert.equal((await faceStatus("synthetic_doc_precheck_pass_20261125").get()).exists,false);
+    assert.equal((await faceMedia("synthetic_doc_precheck_pass_20261125").get()).exists,false);
+    assert.equal(residentAiCalls.length,1);
+    assert.match(resident.cacheControl,/no-store/);
+    pass("Recognized synthetic government ID advances to selfie scan, no Verified status/media saved");
+
+    const unsupportedPreUid="synthetic_school_precheck_20261125";
+    const unsupportedPreToken=await makeAccount(unsupportedPreUid,"resident","approved");
+    nextPrecheckAi={outcome:"pass",documentScreening:{
+      ...baselineScreen,status:"unsupported",detectedIdType:null,
+      warningCodes:["school_id_not_supported"]
+    }};
+    resident=await reviewImages(unsupportedPreToken,docRoute,{selfie:false});
+    assert.equal(resident.status,200,JSON.stringify(resident.body));
+    assert.equal(resident.body.outcome,"retry");
+    assert.equal(resident.body.decision,"rescan_required");
+    assert.equal((await faceStatus(unsupportedPreUid).get()).exists,false);
+    assert.equal((await faceMedia(unsupportedPreUid).get()).exists,false);
+    pass("School ID rejected during actual precheck; no Admin case or selfie request");
+
+    const blurryPreUid="synthetic_blurry_precheck_20261125";
+    const blurryPreToken=await makeAccount(blurryPreUid,"resident","approved");
+    nextPrecheckAi={outcome:"review",documentScreening:{
+      ...baselineScreen,status:"inconclusive",detectedIdType:null,
+      imageQualityStatus:"low",
+      warningCodes:["low_document_image_quality"],
+      profileNameCheck:"inconclusive",
+    }};
+    resident=await reviewImages(blurryPreToken,docRoute,{selfie:false});
+    assert.equal(resident.status,200,JSON.stringify(resident.body));
+    assert.equal(resident.body.outcome,"review");
+    assert.equal(resident.body.status,"pending");
+    const blurryCase=(await faceStatus(blurryPreUid).get()).data();
+    assert.equal(blurryCase.status,"pending");
+    assert.equal(blurryCase.verificationMethod,"volunserve_ai_ocr_manual_review");
+    assert.equal(blurryCase.reviewTrack,"blurry_id_review");
+    assert.equal(blurryCase.aiAttemptCount,undefined);
+    const blurryMedia=(await faceMedia(blurryPreUid).get()).data();
+    assert.ok(blurryMedia.assets.front&&blurryMedia.assets.back);
+    assert.equal(blurryMedia.assets.selfie,undefined);
+    assert.equal((await db.collection("users").doc(blurryPreUid).get()).data().identityVerified,false);
+    pass("Blurry National ID queues OCR-only Admin review with protected front/back and zero face attempts");
+    const uploadCountAtPending=evidenceStorage.size;
+    const aiCallsAtPending=residentAiCalls.length;
+    resident=await reviewImages(blurryPreToken,docRoute,{selfie:false});
+    assert.equal(resident.status,200);
+    assert.equal(resident.body.outcome,"review");
+    assert.equal(resident.body.verificationId,blurryCase.verificationId);
+    assert.equal(residentAiCalls.length,aiCallsAtPending);
+    assert.equal(evidenceStorage.size,uploadCountAtPending);
+    pass("Repeated pending precheck is idempotent: no second AI request or media upload");
+    resident=await reviewImages(blurryPreToken,faceRoute,{selfie:true});
+    assert.equal(resident.status,409);
+    assert.equal(resident.body.error,"identity_manual_review_pending");
+    assert.equal((await prepAttempts(blurryPreUid)).size,0);
+    pass("Face scan blocked while OCR-only review pending; no face attempt consumed");
+
+    const fullUid="synthetic_full_face_review_20261125";
+    const fullToken=await makeAccount(fullUid,"resident","approved");
+    nextFaceAi={
+      status:"verified",decision:"verified",
+      verificationId:"synthetic_ai_claimed_verified",
+      matchScore:.99,livenessScore:.99,
+      livenessImplemented:true,authenticityVerified:true,
+      documentScreening:baselineScreen,
+      message:"Synthetic AI claimed positive match - never trust as issuer proof"
+    };
+    const fullBefore=evidenceStorage.size;
+    resident=await reviewImages(fullToken,faceRoute,{selfie:true});
+    assert.equal(resident.status,200,JSON.stringify(resident.body));
+    assert.equal(resident.body.status,"pending");
+    assert.equal(resident.body.decision,"manual_review");
+    assert.equal(resident.body.attemptCount,1);
+    assert.equal(resident.body.automaticVerificationEligible,false);
+    const fullProfile=(await db.collection("users").doc(fullUid).get()).data();
+    assert.equal(fullProfile.identityStatus,"pending");
+    assert.equal(fullProfile.identityVerified,false);
+    const fullVerify=(await faceStatus(fullUid).get()).data();
+    assert.equal(fullVerify.aiAttemptCount,1);
+    assert.equal(fullVerify.requiresManualReview,true);
+    assert.equal(fullVerify.automaticVerificationEligible,false);
+    assert.equal(fullVerify.privateEvidenceRequestId,
+      (await faceMedia(fullUid).get()).data().requestId);
+    assert.equal(evidenceStorage.size-fullBefore,3);
+    assert.equal((await prepAttempts(fullUid)).size,1);
+    assert.ok(!JSON.stringify(fullVerify).includes("FORGED-FRONTEND-NAME"));
+    pass("Even forged AI 'verified' + liveness claims yield pending Admin and private 3-image evidence");
+    const fullCallsBefore=residentAiCalls.length;
+    resident=await reviewImages(fullToken,faceRoute,{selfie:true});
+    assert.equal(resident.status,409);
+    assert.equal(resident.body.error,"identity_manual_review_pending");
+    assert.equal(residentAiCalls.length,fullCallsBefore);
+    assert.equal((await prepAttempts(fullUid)).size,1);
+    pass("Duplicate face submit while Admin review pending cannot consume another attempt");
+
+    const noConsentUid="synthetic_missing_consent_20261125";
+    const noConsentToken=await makeAccount(noConsentUid,"resident","approved");
+    const beforeMissingConsent=residentAiCalls.length;
+    resident=await reviewImages(noConsentToken,faceRoute,{selfie:true,consent:false});
+    assert.equal(resident.status,400,JSON.stringify(resident.body));
+    assert.equal(resident.body.error,"identity_evidence_consent_required");
+    assert.equal(residentAiCalls.length,beforeMissingConsent);
+    const noConsent=(await faceStatus(noConsentUid).get()).data();
+    assert.equal(noConsent.aiAttemptCount,undefined);
+    assert.equal(noConsent.processingRequestId,undefined);
+    assert.equal((await faceMedia(noConsentUid).get()).exists,false);
+    pass("Missing selfie/ID retention consent blocks AI proxy and cleans Firestore processing lease");
+
+    const exhaustedUid="synthetic_exhausted_attempts_20261125";
+    const exhaustedToken=await makeAccount(exhaustedUid,"resident","approved");
+    await faceStatus(exhaustedUid).set({
+      aiAttemptCount:3,status:"failed",requiresManualReview:false,
+      lastSubmissionAt:FieldValue.serverTimestamp()
+    });
+    const callsBeforeCap=residentAiCalls.length;
+    resident=await reviewImages(exhaustedToken,faceRoute,{selfie:true});
+    assert.equal(resident.status,409,JSON.stringify(resident.body));
+    assert.equal(resident.body.error,"identity_attempt_limit_reached");
+    assert.equal(residentAiCalls.length,callsBeforeCap);
+    assert.equal((await prepAttempts(exhaustedUid)).size,0);
+    assert.equal((await db.collection("users").doc(exhaustedUid).get()).data().identityVerified,false);
+    pass("Three-attempt limit is enforced atomically BEFORE Python AI call or media upload");
 
     const target="synthetic_case_main_20261125";
     await record(target);
