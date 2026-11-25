@@ -231,13 +231,19 @@ async function applyActualAutomaticTransaction(uid,{faceOnly=false}={}){
   const userRef=db.collection("users").doc(uid);
   const verificationRef=db.collection("identityVerifications").doc(uid);
   const evidenceRef=db.collection("identityPrivateEvidence").doc(uid);
+  const proofReplayRefs=autoCompletion.eligible ? {
+    issuer:db.collection("identityTrustedProofUses")
+      .doc(autoCompletion.trustedProofReplayKeys.issuer),
+    pad:db.collection("identityTrustedProofUses")
+      .doc(autoCompletion.trustedProofReplayKeys.pad),
+  }:null;
   await verificationRef.set({processingRequestId:requestId,aiAttemptCount:0,aiAttemptCycle:1});
   const ctx={
     db:{collection:name=>db.collection(name),
       runTransaction:callback=>db.runTransaction(tx=>Promise.resolve(callback(tx)))},
     userRef,verificationRef,evidenceRef,
     uid,requestId,verificationId,documentScreening,newEvidenceAssets,
-    autoCompletion,automaticApproval,
+    autoCompletion,automaticApproval,proofReplayRefs,
     previousEvidenceAssets:null,
     decision:"manual_review",faceOnly,faceComparisonPassed:faceOnly,
     recognizedSelectedId:true,
