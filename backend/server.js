@@ -4966,6 +4966,10 @@ app.get("/api/identity/face-engine-health", requireFirebaseUser, async (_request
       endpoint: getIdentityAiEndpoint(),
       internalKey: String(process.env.IDENTITY_AI_INTERNAL_KEY || "").trim(),
       requireDocumentReadiness: false,
+      // Render Free AI can return 503 while waking. Give its public GET
+      // health endpoint bounded, spaced retries; NEVER replay POST/media.
+      healthTimeoutsMs: [25000, 20000, 15000, 10000],
+      healthRetryDelaysMs: [6000, 12000, 18000],
     });
     return response.status(result.statusCode).json(result.body);
   } catch {
