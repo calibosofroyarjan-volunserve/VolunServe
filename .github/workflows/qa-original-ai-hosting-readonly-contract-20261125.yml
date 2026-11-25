@@ -1,0 +1,133 @@
+name: Original AI Three-Tier Read-Only Audit (NO DEPLOY)
+on:
+  push:
+    branches: [qa/original-ai-hosting-readonly-contract-20261125]
+    paths: [.github/workflows/qa-original-ai-hosting-readonly-contract-20261125.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-contract-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source contract: last-known Hosting UI plus actually deployed Node and Python
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='e7e5e6804c9f4cb9fff34377d4ad8cae1f69df3f';
+            const hosting='e8bb5308b1e0bbd477d0c6721aee83a66ebd2dde';
+            const node='d3308da6107f517061f5022997a229de9d05a0cb';
+            const python='737dd2b68f21840a6fd72b1af61c18b1e8b72e89';
+            const path='.github/workflows/qa-original-ai-hosting-readonly-contract-20261125.yml';
+            const cmp=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(cmp.data.behind_by,0);
+            assert.deepEqual((cmp.data.files||[]).map(x=>x.filename),[path],
+              'No production, hosting, Python, Firebase or unrelated application changes permitted');
+            const source=async(file,ref)=>{
+              const {data}=await github.rest.repos.getContent({owner,repo,path:file,ref});
+              assert.equal(data.encoding,'base64');
+              return Buffer.from(data.content,'base64').toString('utf8');
+            };
+            const [web,client,release,server,ai,evidence]=await Promise.all([
+              source('app/identity-verification.web.tsx',hosting),
+              source('lib/identityVerification.ts',hosting),
+              source('.github/workflows/release-original-face-only-hosting-20261125.yml',hosting),
+              source('backend/server.js',node),
+              source('identity-ai/main.py',python),
+              source('backend/identityPrivateEvidence.js',node)
+            ]);
+            const checks=[
+              ['Web feature is explicit opt-in',web.includes('EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true"')],
+              ['Face-only web skips OCR',web.includes('skip OCR and text/name/birthday checks')],
+              ['Web submission passes face-only option',web.includes('{ faceOnly: FACE_ONLY_MODE }')],
+              ['Web checks dedicated engine',web.includes('checkIdentityEngineReady(FACE_ONLY_MODE)')],
+              ['Hosting release configured for face-only',release.includes("EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'")],
+              ['Hosting release targets Node backend',release.includes('EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com')],
+              ['Client sends consent for private photo evidence',client.includes('formData.append("identityEvidenceConsent", "true")')],
+              ['Client uses face-only Node endpoint',client.includes('/api/identity/verify-face-only')],
+              ['Client uses face-only health endpoint',client.includes('/api/identity/face-engine-health')],
+              ['Client uses Firebase bearer token',client.includes('Authorization:') && client.includes('Bearer')],
+              ['Client restricts face-only to National ID',client.includes('faceOnly && input.idType !== "national_id"')],
+              ['Node has separate feature gate',server.includes('VOLUNSERVE_FACE_ONLY_ENABLED || ""')],
+              ['Node authenticated face-only route',server.includes('"/api/identity/verify-face-only"') && server.includes('requireFirebaseUser')],
+              ['Node forwards to Python face-only endpoint',server.includes('replace(/\\/verify$/, "/verify-face-only")')],
+              ['Node requires consented private evidence',server.includes('requiresPrivateEvidence = faceOnly ||')],
+              ['Node face response cannot auto-verify resident',server.includes('identityVerified: false,')],
+              ['Node requires independent Admin ID check',server.includes('"face_only_independent_review_required"') && server.includes('issuerReviewAttested')],
+              ['Node keeps authenticated private Cloudinary photos',evidence.includes('uploadIdentityEvidence') && evidence.includes('authenticated')],
+              ['Python endpoint is internally authenticated',ai.includes('@app.post("/verify-face-only")') && ai.includes('require_internal_backend(')],
+              ['Python face-only requires national ID',ai.includes('if face_only and id_type != "national_id":')],
+              ['Python explicitly disclaims document authenticity',ai.includes('"authenticityVerified": False')],
+              ['Python yields explicit match flag',ai.includes('"faceComparisonPassed": face_comparison_passed')]
+            ];
+            checks.forEach(([label,ok])=>{
+              assert.ok(ok,'THREE_TIER_SOURCE_MISMATCH: '+label);
+              core.info('PASS SOURCE CONTRACT: '+label);
+            });
+            core.info('SOURCE PASS only: whether flags are active in actual running Hosting/Render remains unverified');
+      - name: Six public/unauthorized HTTPS GETs only; never handle private resident data
+        env:
+          EXPECTED_HOSTING_SOURCE_SHA: e8bb5308b1e0bbd477d0c6721aee83a66ebd2dde
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const allowed=new Set(['volunserve.com','volunserve.onrender.com','volunserve-identity-ai.onrender.com']);
+          const checks=[
+            ['hosting_manifest','https://volunserve.com/volunserve-release.json',200],
+            ['node_health','https://volunserve.onrender.com/health',200],
+            ['python_health','https://volunserve-identity-ai.onrender.com/health',200],
+            ['node_face_health_anon','https://volunserve.onrender.com/api/identity/face-engine-health',401],
+            ['node_status_anon','https://volunserve.onrender.com/api/identity/status',401],
+            ['node_admin_anon','https://volunserve.onrender.com/api/admin/identity/reviews',401]
+          ];
+          const get=async(name,url,expect)=>{
+            const u=new URL(url);
+            assert.equal(u.protocol,'https:');
+            assert(allowed.has(u.hostname));
+            let last;
+            for(let attempt=0;attempt<3;attempt++){
+              try{
+                const res=await fetch(u,{method:'GET',redirect:'error',
+                  headers:{Accept:'application/json'},
+                  signal:AbortSignal.timeout(65000)});
+                assert.equal(res.status,expect,name+' unexpected HTTP response');
+                const body=await res.json();
+                console.log('GET_ONLY_HTTP',name,res.status);
+                return body;
+              }catch(err){
+                last=err;
+                if(attempt<2)await new Promise(r=>setTimeout(r,4000));
+              }
+            }
+            throw Error('READONLY_CHECK_BLOCKED '+name+': '+last?.name);
+          };
+          (async()=>{
+            const manifest=await get(...checks[0]);
+            const revision=String(manifest.revision||'');
+            assert(/^[0-9a-f]{40}$/.test(revision));
+            console.log('LIVE_HOSTING_REVISION',revision);
+            console.log('HOSTING_REFERENCE_PARITY',
+              revision===process.env.EXPECTED_HOSTING_SOURCE_SHA?'MATCH':'DIFFERENT_OR_NEWER_UNVERIFIED');
+            const n=await get(...checks[1]);
+            const p=await get(...checks[2]);
+            assert.equal(n.ok,true);
+            assert.equal(p.ok,true);
+            console.log('PUBLIC_HEALTH_SUMMARY',JSON.stringify({
+              nodeHealthy:n.ok===true,
+              cloudinaryConfigured:n.assistanceEvidenceStorage==='secure_cloudinary_configured',
+              pythonHealthy:p.ok===true,
+              faceEngineReady:p.verificationEngineReady===true,
+              privateAuthConfigured:p.internalAuthConfigured===true
+            }));
+            for(const c of checks.slice(3))await get(...c);
+            console.log('AUDIT_ONLY: six anonymous GETs; no POST/upload, Firebase writes, tokens, paid service or deployment');
+            console.log('NOT_RELEASE_READY: actual build flag, Node feature flag, shared Node-to-Python key and hosted real comparison still unverified');
+          })().catch(e=>{console.error('READONLY_AUDIT_BLOCKED',e.message);process.exitCode=1});
+          NODE
+# Only reads pinned GitHub source and public URLs. No production changes.
