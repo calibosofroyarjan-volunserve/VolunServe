@@ -51,6 +51,26 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      - name: Fail closed if public Hosting release marker has changed
+        shell: bash
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          (async()=>{
+            const response=await fetch("https://volunserve.com/volunserve-release.json",{
+              headers:{"Cache-Control":"no-cache"},
+              signal:AbortSignal.timeout(15000)
+            });
+            assert.equal(response.status,200,"BLOCKED: live release marker unavailable");
+            const marker=await response.json();
+            assert.equal(marker.app,"VolunServe","BLOCKED: unexpected Hosting app");
+            assert.equal(marker.firebaseProject,"volunserve-3aa5b","BLOCKED: unexpected Firebase project");
+            assert.equal(marker.revision,"5af28d279618dacd5eab518e5e0d52259eae8844",
+              "BLOCKED: production Hosting changed since frozen snapshot");
+            console.log("PASS: live Hosting still reports frozen 5af28d snapshot");
+          })().catch(error=>{console.error(error);process.exitCode=1});
+          NODE
       - name: Install project dependencies
         run: npm ci --no-audit --no-fund
       - name: Emergency Response source and 100 m GPS contracts
