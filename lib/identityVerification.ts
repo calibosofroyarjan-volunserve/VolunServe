@@ -436,11 +436,11 @@ async function fetchWithTimeout(
  * Check the deployed Python AI engine before submitting private identity
  * media or consuming an AI attempt. This endpoint requires Firebase auth.
  */
-export async function checkIdentityEngineReady(): Promise<void> {
+export async function checkIdentityEngineReady(faceOnly = false): Promise<void> {
   const user = await getAuthenticatedUser();
   const token = await user.getIdToken();
   const response = await fetchWithTimeout(
-    `${getBackendBaseUrl()}/api/identity/engine-health`,
+    `${getBackendBaseUrl()}${faceOnly ? '/api/identity/face-engine-health' : '/api/identity/engine-health'}`,
     {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
