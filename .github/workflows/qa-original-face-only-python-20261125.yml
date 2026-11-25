@@ -1,0 +1,47 @@
+name: Restore Original Face-Only Python National ID Comparison (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/restore-20261023-face-only-python-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-face-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact deployed source baseline and changes restricted to face-only files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='319152e6a1cad5e54653c20e87bd1551a82b219e';
+            const {data}=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(data.behind_by,0);
+            assert.deepEqual((data.files||[]).map(x=>x.filename).sort(), [
+              '.github/workflows/qa-original-face-only-python-20261125.yml',
+              'identity-ai/main.py',
+              'scripts/test-original-face-only-python-20261125.py'
+            ].sort());
+            core.info('PASS: no unrelated source, Firebase, Admin, Cloudinary or deployment changes');
+      - name: Syntax and synthetic private-auth National-ID-only regression
+        run: |
+          python -m py_compile identity-ai/main.py scripts/test-original-face-only-python-20261125.py
+          python scripts/test-original-face-only-python-20261125.py
+      - name: Confirm old /verify remains and nothing is deployed
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('identity-ai/main.py').read_text()
+          assert '@app.post("/verify-face-only")' in text
+          assert '@app.post(\n    "/verify"\n)' in text
+          assert 'run_face_verification' in text
+          print('PASS: original face matcher and separate OCR verify route preserved')
+          print('NO DEPLOY: synthetic bytes only; no Firebase, Cloudinary or camera calls')
+          PY
