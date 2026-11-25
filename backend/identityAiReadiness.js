@@ -28,6 +28,7 @@ async function probeIdentityAiReadiness({
   fetchImpl = fetch,
   wait = pause,
   healthTimeoutsMs = DEFAULT_HEALTH_TIMEOUTS_MS,
+  healthRetryDelaysMs = [1200],
   authTimeoutsMs = DEFAULT_AUTH_TIMEOUTS_MS,
 }) {
   if (!endpoint) {
@@ -88,7 +89,12 @@ async function probeIdentityAiReadiness({
         "The Python AI service timed out or could not be reached. No identity attempt was used.",
       );
     }
-    if (attempt + 1 < healthTimeoutsMs.length) await wait(1200);
+    if (attempt + 1 < healthTimeoutsMs.length) {
+      // Retry GET /health only. Allow extra spacing on face-only free-plan
+      // cold starts; the original OCR check retains its exact 1.2s delay.
+      const retryDelay = healthRetryDelaysMs[Math.min(attempt, healthRetryDelaysMs.length - 1)];
+      await wait(Number.isFinite(retryDelay) && retryDelay >= 0 ? retryDelay : 1200);
+    }
   }
   if (!health) return lastHealthFailure;
 
