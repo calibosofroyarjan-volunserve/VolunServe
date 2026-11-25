@@ -38,6 +38,44 @@ function assertOriginalAiStagingIsolation(env, serviceAccount) {
     throw new Error("Original AI staging isolation blocked: Firebase service account must be independently provisioned for staging.");
   }
 
+  // An attacker or accidental deployment can relabel a production Firebase
+  // private key with a staging project_id. Project and client_email labels alone
+  // are NOT credential provenance. Require operator-attested, separate private
+  // key fingerprints before any Firebase SDK initialization.
+  const accountEmail = String(serviceAccount?.client_email || "").trim().toLowerCase();
+  const accountKey = typeof serviceAccount?.private_key === "string"
+    ? serviceAccount.private_key.trim() : "";
+  const expectedAccountDomain = "@" + expectedFirebase.toLowerCase() + ".iam.gserviceaccount.com";
+  if (String(serviceAccount?.type || "") !== "service_account" ||
+      !accountEmail.endsWith(expectedAccountDomain) || !accountKey) {
+    throw new Error(
+      "Original AI staging isolation blocked: staging Firebase service account identity and private key required.",
+    );
+  }
+  const stageFirebaseKeyFingerprint = String(
+    vars.VOLUNSERVE_STAGING_FIREBASE_PRIVATE_KEY_SHA256 || "",
+  ).trim().toLowerCase();
+  const productionFirebaseKeyFingerprint = String(
+    vars.VOLUNSERVE_PRODUCTION_FIREBASE_PRIVATE_KEY_SHA256 || "",
+  ).trim().toLowerCase();
+  const firebaseSha256Format = /^[a-f0-9]{64}$/;
+  if (!firebaseSha256Format.test(stageFirebaseKeyFingerprint) ||
+      !firebaseSha256Format.test(productionFirebaseKeyFingerprint)) {
+    throw new Error(
+      "Original AI staging isolation blocked: independently recorded Firebase credential fingerprints required.",
+    );
+  }
+  const actualFirebaseKeyDigest = crypto.createHash("sha256")
+    .update(accountKey, "utf8").digest();
+  const expectedFirebaseKeyDigest = Buffer.from(stageFirebaseKeyFingerprint, "hex");
+  const productionFirebaseKeyDigest = Buffer.from(productionFirebaseKeyFingerprint, "hex");
+  if (!crypto.timingSafeEqual(actualFirebaseKeyDigest, expectedFirebaseKeyDigest) ||
+      crypto.timingSafeEqual(expectedFirebaseKeyDigest, productionFirebaseKeyDigest)) {
+    throw new Error(
+      "Original AI staging isolation blocked: staging Firebase private key does not match isolated credential attestation.",
+    );
+  }
+
   // Other SDKs may read implicit Google/Firebase environment variables,
   // bypassing the explicitly validated service-account project above.
   // This staging candidate requires only the dedicated JSON account.
