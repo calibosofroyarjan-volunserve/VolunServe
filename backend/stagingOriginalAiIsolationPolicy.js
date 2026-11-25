@@ -38,9 +38,37 @@ function assertOriginalAiStagingIsolation(env, serviceAccount) {
     throw new Error("Original AI staging isolation blocked: Firebase service account must be independently provisioned for staging.");
   }
 
+  // Other SDKs may read implicit Google/Firebase environment variables,
+  // bypassing the explicitly validated service-account project above.
+  // This staging candidate requires only the dedicated JSON account.
+  if (String(vars.GOOGLE_APPLICATION_CREDENTIALS || "").trim() ||
+      String(vars.FIREBASE_CONFIG || "").trim()) {
+    throw new Error(
+      "Original AI staging isolation blocked: implicit Google/Firebase credential configuration is forbidden.",
+    );
+  }
+  for (const projectVariable of ["GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT"]) {
+    const implicitProject = String(vars[projectVariable] || "").trim();
+    if (implicitProject && implicitProject !== expectedFirebase) {
+      throw new Error(
+        "Original AI staging isolation blocked: implicit Google project conflicts with staging Firebase project.",
+      );
+    }
+  }
+
   const aiUrl = String(vars.IDENTITY_AI_SERVICE_URL || "").trim().replace(/\/+$/, "");
   if (aiUrl !== STAGING_AI_URL) {
     throw new Error("Original AI staging isolation blocked: dedicated staging Python AI URL required.");
+  }
+
+  // Cloudinary's URL-style environment configuration may carry a second
+  // credential and cloud selection that bypasses the explicit stage-only
+  // cloud_name/api_key/api_secret validation. Reject it rather than risk
+  // loading a hidden production account via the SDK.
+  if (String(vars.CLOUDINARY_URL || "").trim()) {
+    throw new Error(
+      "Original AI staging isolation blocked: implicit Cloudinary URL credentials are forbidden.",
+    );
   }
 
   const expectedCloud = String(vars.VOLUNSERVE_STAGING_CLOUDINARY_CLOUD_NAME || "").trim();
