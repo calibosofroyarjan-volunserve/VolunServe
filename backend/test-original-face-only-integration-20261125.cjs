@@ -98,7 +98,8 @@ test("real Node gateway forwards front ID + selfie to dedicated face-only Python
 
 test("unconfigured Node AI URL fails closed instead of crashing",async()=>{
   const {gateway}=makeGateway("");
-  await assert.rejects(()=>gateway.callIdentityAiService(await mockForm(),{faceOnly:true}),
+  const data=await mockForm();
+  await assert.rejects(()=>gateway.callIdentityAiService(data,{faceOnly:true}),
     err=>err.code==="identity_ai_not_configured" && err.statusCode===503);
 });
 
