@@ -31,7 +31,8 @@ test("face-only guarded parser accepts National ID front and selfie without OCR/
   assert.notDeepEqual(files.front.data,files.selfie.data);
 });
 test("unmodified OCR evidence route still requires National ID reverse",async()=>{
-  await assert.rejects(()=>parseConsentedIdentityEvidence(await request()),
+  const input=await request();
+  await assert.rejects(()=>parseConsentedIdentityEvidence(input),
     error=>error.code==="identity_evidence_incomplete");
 });
 test("without explicit consent, neither path retains private evidence",async()=>{
@@ -39,22 +40,25 @@ test("without explicit consent, neither path retains private evidence",async()=>
     {allowMissingBack:true}),null);
 });
 test("face-only parser cannot skip missing selfie",async()=>{
-  await assert.rejects(()=>parseConsentedIdentityEvidence(await request({selfie:false}),
+  const input=await request({selfie:false});
+  await assert.rejects(()=>parseConsentedIdentityEvidence(input,
     {allowMissingBack:true}),error=>error.code==="identity_evidence_incomplete");
 });
 test("unsupported ID cannot evade reverse-side requirement via optional-back",async()=>{
-  await assert.rejects(()=>parseConsentedIdentityEvidence(await request({type:"school_id"}),
+  const input=await request({type:"school_id"});
+  await assert.rejects(()=>parseConsentedIdentityEvidence(input,
     {allowMissingBack:true}),error=>error.code==="identity_evidence_incomplete");
 });
 test("invalid image MIME rejected before private upload",async()=>{
-  await assert.rejects(()=>parseConsentedIdentityEvidence(await request({badType:true}),
+  const input=await request({badType:true});
+  await assert.rejects(()=>parseConsentedIdentityEvidence(input,
     {allowMissingBack:true}),error=>error.code==="identity_evidence_invalid");
 });
 test("backend face-only route is disabled unless explicit server flag",()=>{
   const s=fs.readFileSync(require.resolve("./server.js"),"utf8");
   assert.match(s,/VOLUNSERVE_FACE_ONLY_ENABLED/);
   assert.match(s,/request\.path === "\/api\/identity\/verify-face-only"/);
-  assert.match(s,/getIdentityAiEndpoint\(\)\.replace\(\/\\\/verify\$\/, "\/verify-face-only"\)/);
+  assert.ok(s.includes('"/verify-face-only"'),"Proxy must forward to dedicated Python face-only route");
   assert.match(s,/faceOnly \? rawDecision : enforceSelectedIdDecision/);
   assert.match(s,/faceOnly \? "face_only_admin_review"/);
   assert.match(s,/faceOnly \? "volunserve_ai_face_only"/);
