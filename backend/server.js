@@ -5288,23 +5288,27 @@ app.get(
           ? verificationSnapshot.data() ||
             {}
           : {};
+      // Fail closed when legacy or interrupted writes leave profile fields
+      // inconsistent. A single "verified" text field is NOT sufficient
+      // evidence that Admin actually promoted the Resident account.
+      const storedStatus = normalizeIdentityStatus(
+        profile.identityStatus || verification.status || "basic",
+      );
+      const accountApproved =
+        normalizeIdentityStatus(profile.identityStatus) === "verified" &&
+        profile.identityVerified === true;
       const identityStatus =
-        normalizeIdentityStatus(
-          profile
-            .identityStatus ||
-            verification.status ||
-            "basic",
-        );
+        storedStatus === "verified" && !accountApproved
+          ? (normalizeIdentityStatus(verification.status) === "pending" ||
+             normalizeIdentityStatus(verification.status) === "failed"
+               ? normalizeIdentityStatus(verification.status)
+               : "basic")
+          : storedStatus;
       response.json({
         ok:
           true,
         identityStatus,
-        identityVerified:
-          profile
-            .identityVerified ===
-            true ||
-          identityStatus ===
-            "verified",
+        identityVerified: accountApproved,
         verificationId:
           cleanText(
             verification
