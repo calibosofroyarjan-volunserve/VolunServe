@@ -100,12 +100,51 @@ const cloudinary={
   }
 };
 function configureCloudinary(){ /* Fake only, no real service or credentials. */ }
-// All upstream ID-AI responses here are fabricated. The production Node
-// routes remain exact; the private Python service is NOT contacted.
+// Standard 52 isolated tests keep their fake AI results.
+// An optional separate CI job runs the IDENTICAL deployed Node proxy against
+// the ACTUAL pinned Python FastAPI OCR/MediaPipe service on loopback only.
+const USE_REAL_PYTHON = process.env.QA_REAL_ORIGINAL_AI === "true";
 let nextPrecheckAi=null;
 let nextFaceAi=null;
 let residentAiCalls=[];
+let actualPythonCalls=[];
+let actualOriginalProxy=null;
+function getActualOriginalProxy(){
+  if(!USE_REAL_PYTHON)throw Error("Real Python QA opt-in required");
+  if(actualOriginalProxy)return actualOriginalProxy;
+  const localUrl=String(process.env.QA_REAL_ORIGINAL_AI_URL||"");
+  if(localUrl!=="http://127.0.0.1:18766")
+    throw Error("Real Python integration tests are ONLY allowed on pinned loopback");
+  const exactSource=[
+    section("function cleanText(","function normalizeAiDecision("),
+    section("function makeHttpError(","function getCloudinaryConfig()"),
+    section("function getIdentityAiEndpoint()","function diditCleanupFields()")
+  ].join("\n");
+  const guardedFetch=async(url,opts)=>{
+    assert.ok(
+      url==="http://127.0.0.1:18766/verify" ||
+      url==="http://127.0.0.1:18766/document/precheck",
+      "No outbound identity request may go beyond pinned localhost");
+    assert.equal(opts.method,"POST");
+    assert.equal(opts.headers["X-VolunServe-Internal-Key"],"local-qa-only-nonsecret");
+    assert.ok(String(opts.headers["X-VolunServe-User-Id"]).startsWith("synthetic_real_"));
+    assert.equal(opts.headers["X-VolunServe-Profile-First-Name"],"TEST");
+    assert.equal(opts.headers["X-VolunServe-Profile-Last-Name"],"SAMPLE");
+    assert.ok(Buffer.isBuffer(opts.body)&&opts.body.length>100);
+    actualPythonCalls.push({path:new URL(url).pathname,method:"POST"});
+    return fetch(url,opts);
+  };
+  const imported=new Function("process","fetch","Buffer","AbortSignal","console",
+      exactSource+"\nreturn callIdentityAiService;");
+  actualOriginalProxy=imported({
+    env:{IDENTITY_AI_SERVICE_URL:localUrl,
+      IDENTITY_AI_INTERNAL_KEY:"local-qa-only-nonsecret"}
+  },guardedFetch,Buffer,AbortSignal,console);
+  return actualOriginalProxy;
+}
 async function callIdentityAiService(request,options={}){
+  if(USE_REAL_PYTHON&&String(request.firebaseUser.uid).startsWith("synthetic_real_"))
+    return getActualOriginalProxy()(request,options);
   assert.ok(Buffer.isBuffer(request.body) && request.body.length>0);
   assert.equal(request.identityExpectedName.firstName,"Synthetic");
   assert.equal(request.identityExpectedName.lastName,"QA");
@@ -988,6 +1027,124 @@ async function run() {
     assert.equal(purged,0);
     assert.equal(evidenceStorage.size,2); // nonexpired OCR-only front and back
     pass("No expired evidence remains, and only active two-sided ID assets survive");
+
+
+    if(USE_REAL_PYTHON){
+      // Additional REAL Node proxy -> Python FastAPI -> MediaPipe/Tesseract
+      // integration on loopback, with demo Firebase emulator and an in-memory
+      // authenticated Cloudinary fake. No production/staging provider calls.
+      const assetDir=process.env.QA_REAL_ORIGINAL_AI_ASSETS_DIR;
+      assert.ok(assetDir&&path.resolve(assetDir).startsWith(path.resolve(__dirname)+path.sep),
+        "Only runner-generated local fake media are allowed");
+      const fakeMedia={
+        front:fs.readFileSync(path.join(assetDir,"front.png")),
+        back:fs.readFileSync(path.join(assetDir,"back.png")),
+        school:fs.readFileSync(path.join(assetDir,"school.png")),
+        selfie:fs.readFileSync(path.join(assetDir,"selfie.png"))
+      };
+      const multipart=async(uid,token,route,images)=>{
+        const form=new FormData();
+        form.set("idType","national_id");
+        form.set("identityEvidenceConsent","true");
+        form.set("firstName","FORGED-FRONTEND-NAME");
+        form.set("lastName","FORGED");
+        form.set("dateOfBirth","1900-01-01");
+        for(const [field,image] of Object.entries(images))
+          form.set(field,new Blob([image],{type:"image/png"}),field+".png");
+        const headers={authorization:"Bearer "+token};
+        if(route.includes("precheck"))
+          headers["X-VolunServe-Document-Precheck-Consent"]="true";
+        const result=await fetch("http://127.0.0.1:"+server.address().port+route,
+          {method:"POST",headers,body:form});
+        return {status:result.status,body:await result.json()};
+      };
+      async function syntheticRealAccount(uid){
+        const token=await makeAccount(uid,"resident","approved");
+        await profileRef(uid).update({firstName:"TEST",lastName:"SAMPLE"});
+        return token;
+      }
+      const uid="synthetic_real_resident_20261125";
+      const token=await syntheticRealAccount(uid);
+      const precheckUri="/api/identity/document/precheck-with-evidence";
+      const verifyUri="/api/identity/verify-with-evidence";
+      const originalStorageCount=evidenceStorage.size;
+      const originalCallCount=actualPythonCalls.length;
+      let output=await multipart(uid,token,precheckUri,{
+        idDocument:fakeMedia.front,idBackDocument:fakeMedia.back
+      });
+      assert.equal(output.status,200,JSON.stringify(output.body));
+      assert.equal(output.body.outcome,"pass",JSON.stringify(output.body));
+      assert.equal(output.body.decision,"ready_for_face_scan");
+      assert.equal(output.body.authenticityVerified,false);
+      assert.equal(output.body.livenessVerified,false);
+      assert.equal((await verificationRef(uid).get()).exists,false);
+      assert.equal((await db.collection("identityPrivateEvidence").doc(uid).get()).exists,false);
+      assert.equal(actualPythonCalls[originalCallCount].path,"/document/precheck");
+      pass("REAL Node→Python HTTP precheck performs Tesseract on fake National ID, allows selfie step without promotion");
+
+      const schoolUid="synthetic_real_school_20261125";
+      const schoolToken=await syntheticRealAccount(schoolUid);
+      output=await multipart(schoolUid,schoolToken,precheckUri,{
+        idDocument:fakeMedia.school,idBackDocument:fakeMedia.back
+      });
+      assert.equal(output.status,200,JSON.stringify(output.body));
+      assert.equal(output.body.outcome,"retry");
+      assert.equal(output.body.documentScreening.status,"unsupported");
+      assert.ok(output.body.documentScreening.warningCodes.includes("school_id_not_supported"));
+      assert.equal((await verificationRef(schoolUid).get()).exists,false);
+      assert.equal((await db.collection("identityPrivateEvidence").doc(schoolUid).get()).exists,false);
+      pass("REAL Node→Python OCR rejects fake SCHOOL ID before face matching or private upload");
+
+      output=await multipart(uid,token,verifyUri,{
+        idDocument:fakeMedia.front,idBackDocument:fakeMedia.back,
+        selfie:fakeMedia.selfie
+      });
+      assert.equal(output.status,200,JSON.stringify(output.body));
+      assert.equal(output.body.status,"failed",JSON.stringify(output.body));
+      assert.equal(output.body.decision,"failed");
+      assert.equal(output.body.attemptCount,1);
+      assert.equal(output.body.automaticVerificationEligible,false);
+      assert.equal(output.body.documentScreening.detectedIdType,"national_id");
+      assert.equal((await profileRef(uid).get()).data().identityVerified,false);
+      const verification=(await verificationRef(uid).get()).data();
+      assert.equal(verification.aiAttemptCount,1);
+      assert.equal(verification.requiresManualReview,false);
+      assert.equal(verification.documentScreening.authenticityVerified,false);
+      const protectedEvidence=(await db.collection("identityPrivateEvidence").doc(uid).get()).data();
+      assert.ok(protectedEvidence.assets.front &&
+        protectedEvidence.assets.back && protectedEvidence.assets.selfie);
+      assert.equal(protectedEvidence.requestId,verification.privateEvidenceRequestId);
+      assert.equal((await db.collection("identityVerificationAttempts")
+        .where("uid","==",uid).get()).size,1);
+      assert.equal(evidenceStorage.size,originalStorageCount+3);
+      pass("REAL Resident→Node→Python /verify performs OCR+MediaPipe, rejects face-less demo, logs one failed attempt and retains private mock evidence");
+
+      const reusedUid="synthetic_real_reused_20261125";
+      const reusedToken=await syntheticRealAccount(reusedUid);
+      const callsBeforeReuse=actualPythonCalls.length;
+      output=await multipart(reusedUid,reusedToken,verifyUri,{
+        idDocument:fakeMedia.front,idBackDocument:fakeMedia.back,
+        selfie:fakeMedia.front
+      });
+      assert.equal(output.status,400,JSON.stringify(output.body));
+      assert.equal(output.body.error,"identity_ai_failed");
+      assert.equal(actualPythonCalls.length,callsBeforeReuse+1);
+      assert.equal((await db.collection("identityVerificationAttempts")
+        .where("uid","==",reusedUid).get()).size,0);
+      assert.equal((await verificationRef(reusedUid).get()).data().aiAttemptCount,undefined);
+      assert.equal((await db.collection("identityPrivateEvidence").doc(reusedUid).get()).exists,false);
+      pass("REAL Python anti-reuse check blocks identical ID portrait/selfie with HTTP 400, zero attempts and no storage");
+
+      assert.deepEqual(actualPythonCalls.map(x=>x.path),
+        ["/document/precheck","/document/precheck","/verify","/verify"]);
+      assert.ok(actualPythonCalls.every(x=>x.method==="POST"));
+      await destroyIdentityEvidence({
+        assets:protectedEvidence.assets,cloudinary,configureCloudinary
+      });
+      await db.collection("identityPrivateEvidence").doc(uid).delete();
+      assert.equal(evidenceStorage.size,originalStorageCount);
+      pass("All four real HTTP Python requests stayed on loopback and synthetic private media cleaned");
+    }
 
     console.log("PASS: "+labels.length+" real emulator HTTP+Firestore Admin scenarios; DEMO project only");
   } finally {
