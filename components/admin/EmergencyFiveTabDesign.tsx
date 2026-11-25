@@ -297,7 +297,7 @@ export function ReferenceHistory({ incident, assignments, formatDate }: {
 
 
 export function ReferenceVolunteerMatching({ incident, verificationStatus, caseBarangay,
-  eligibleCount, activeAssignments, allAssignments=[], automaticStatus, onCancelAssignment }: {
+  eligibleCount, activeAssignments, allAssignments=[], automaticStatus, onCancelAssignment, manualOnly=false }: {
   incident: AdminCaseView;
   verificationStatus: string;
   caseBarangay: string;
@@ -305,6 +305,7 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
   activeAssignments: AdminAssignmentView[];
   allAssignments?: AdminAssignmentView[];
   automaticStatus?: string;
+  manualOnly?: boolean;
   onCancelAssignment?: (assignment: AdminAssignmentView) => void;
 }) {
   const offers=allAssignments.length ? allAssignments : activeAssignments;
@@ -317,23 +318,23 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
   return <View style={styles.page}>
     <View style={styles.autoIntro}>
       <View style={styles.autoIntroHeading}>
-        <Heading level="page" icon="♧" title="Automatic Volunteer Assignment"
+        <Heading level="page" icon="♧" title={manualOnly ? "Manual Volunteer Assignment" : "Automatic Volunteer Assignment"}
           sub="Offer tasks to eligible Volunteers. Each responder must Accept or Decline."/>
         <Text style={styles.autoIntroStatus}>
-          {autoActive ? "Matching state: "+cap(automaticStatus || "")
+          {manualOnly ? "Manual Admin selection · no automatic dispatch" : autoActive ? "Matching state: "+cap(automaticStatus || "")
             : "Production automatic fan-out is not enabled"}
         </Text>
       </View>
       <View style={styles.autoIntroRules}>
-        <Text style={styles.autoIntroRule}>✓ Match verified skills and availability</Text>
-        <Text style={styles.autoIntroRule}>✓ Same barangay → nearby → SJDM-wide</Text>
+        <Text style={styles.autoIntroRule}>✓ Check approved Volunteer status, skills and availability</Text>
+        <Text style={styles.autoIntroRule}>{manualOnly ? "✓ Admin chooses eligible Volunteers citywide; no barangay matching" : "✓ Same barangay → nearby → SJDM-wide"}</Text>
         <Text style={styles.autoIntroRule}>✓ Record offers, acceptance, declines and activity</Text>
       </View>
     </View>
     <View style={styles.kpiRow}>
       {[
-        ["Eligible in Barangay",ready ? String(eligibleCount) : "—",
-          "Approved candidates for this incident barangay"],
+        [manualOnly ? "Eligible Volunteers" : "Eligible in Barangay",ready ? String(eligibleCount) : "—",
+          manualOnly ? "Approved qualified candidates; no barangay restriction" : "Approved candidates for this incident barangay"],
         ["Task Offers",String(offers.length),
           "Recorded offers, not assumed automatic assignments"],
         ["Pending Acceptance",String(pending),"Waiting for Volunteer response"],
@@ -346,7 +347,7 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
           <Text style={styles.kpiDesc}>{subtitle}</Text>
         </View>)}
     </View>
-    <Card>
+    {!manualOnly && <Card>
       <Heading icon="▤" title="Matching Coverage"
         sub="The engine can expand to the next configured wave when the current one has no available responders."/>
       <View style={styles.waveRow}>
@@ -364,7 +365,11 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
       <Text style={styles.smallFinePrint}>
         Wave eligibility and dispatch confirmation must come from server-side records, not this design.
       </Text>
-    </Card>
+    </Card>}
+    {manualOnly && <Card>
+      <Heading icon="✓" title="Manual Dispatch Ready" sub="Admin selects a qualified approved Volunteer. No automatic matching or barangay waves."/>
+      <Text style={styles.muted}>Once offered, the Volunteer must accept before Start Response and live GPS sharing.</Text>
+    </Card>}
     <Card>
       <Heading icon="♧" title={"Volunteer Task Offers ("+offers.length+")"}
         sub="Real-time Firestore records show the status of each offered task."/>
@@ -373,7 +378,7 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
           <Text style={styles.emptyTitle}>No Volunteer offers recorded yet</Text>
           <Text style={styles.muted}>
             {ready
-              ? "No task offers currently exist for this incident. The Admin must use the verified dispatch workflow."
+              ? "No task offers currently exist. Admin can select an approved qualified Volunteer manually."
               : "Admin validation is required before Volunteer offers can be sent."}
           </Text>
         </View> :
