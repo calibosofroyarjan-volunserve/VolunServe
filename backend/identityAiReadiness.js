@@ -24,6 +24,7 @@ async function responseJson(response) {
 async function probeIdentityAiReadiness({
   endpoint,
   internalKey,
+  requireDocumentReadiness = true,
   fetchImpl = fetch,
   wait = pause,
   healthTimeoutsMs = DEFAULT_HEALTH_TIMEOUTS_MS,
@@ -67,9 +68,9 @@ async function probeIdentityAiReadiness({
           "identity_ai_not_ready",
           "The Python AI engine is not yet ready. Check AI Render logs if this persists.",
         );
-      } else if (body?.documentOcrReady !== true ||
+      } else if (requireDocumentReadiness && (body?.documentOcrReady !== true ||
                  body?.profileComparisonReady !== true ||
-                 body?.documentPrecheckReady !== true) {
+                 body?.documentPrecheckReady !== true)) {
         // Camera and private auth may work even when Tesseract or profile
         // comparison is broken. Fail closed before residents submit ID photos.
         return notReady(
@@ -130,10 +131,12 @@ async function probeIdentityAiReadiness({
             ready: true,
             provider: "volunserve-custom-ai",
             livenessImplemented: health.livenessImplemented === true,
-            documentOcrReady: true,
-            profileComparisonReady: true,
-            documentPrecheckReady: true,
-            message: "Face scan, ID OCR, birthday/barangay comparison and private AI connection are operational. This does not confirm ID authenticity or validated anti-spoofing.",
+            documentOcrReady: health.documentOcrReady === true,
+            profileComparisonReady: health.profileComparisonReady === true,
+            documentPrecheckReady: health.documentPrecheckReady === true,
+            message: requireDocumentReadiness
+              ? "Face scan, ID OCR, birthday/barangay comparison and private AI connection are operational. This does not confirm ID authenticity or validated anti-spoofing."
+              : "Original face-only match engine and private connection are ready. OCR is not required; Admin must independently verify the National ID.",
           }};
         }
         return notReady(
