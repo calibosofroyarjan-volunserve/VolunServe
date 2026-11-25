@@ -43,12 +43,6 @@ async function main() {
       for (const [uid, data] of accounts) {
         await setDoc(doc(db,"users",uid),{uid,...data});
       }
-      await setDoc(doc(db,"disasterCases",CASE),{
-        reporterUid:RESIDENT, status:"validated", verificationStatus:"validated",
-        title:"Synthetic emergency QA", latitude:14.813,longitude:121.045,
-        assignedVolunteerIds:[],assignedVolunteersCount:0,
-        reporterBarangay:"", // The manual offer must NOT need barangay.
-      });
     });
 
     const dbAs = (uid, email) => env.authenticatedContext(uid,{email,email_verified:true}).firestore();
@@ -59,6 +53,39 @@ async function main() {
     const assignmentRef = doc(admin,"responseAssignments",OFFER);
     const incidentRef = doc(admin,"disasterCases",CASE);
     const stamp = () => serverTimestamp();
+
+    // Actual Resident submission goes through the deployed Firestore create
+    // contract, with synthetic metadata and no real resident/photo/GPS.
+    await assertSucceeds(setDoc(doc(resident,"disasterCases",CASE), {
+      reporterUid:RESIDENT,reporterName:"Synthetic Resident",
+      reporterEmail:"resident@test.local",reporterBarangay:"",
+      reporterAddress:"Synthetic QA address",contactNumber:"09123456789",
+      emergencyContact:"",reporterProfilePictureUrl:"",
+      source:"resident_emergency_assistance",requestKind:"emergency_assistance",
+      title:"Synthetic emergency QA",category:"Other Emergency",severity:"medium",
+      status:"reported",verificationStatus:"pending_verification",
+      evidenceReviewStatus:"pending_review",
+      location:"Synthetic incident pin inside SJDM",
+      latitude:14.813,longitude:121.045,gpsAccuracyMeters:20,
+      locationCapturedAt:stamp(),details:"Synthetic resident request for QA testing only.",
+      affectedPeople:1,assistanceTypes:["Emergency assistance"],
+      requiredSkills:["General Volunteer"],neededGoods:["Assessment only"],
+      needsNote:"",needs:"Emergency assistance requested",
+      attachments:[{url:"https://example.invalid/synthetic.jpg",type:"image"}],
+      photoEvidenceCount:1,videoEvidenceCount:0,
+      verification:{gpsProvided:true,photoEvidenceProvided:true},
+      residentConfirmationAccepted:true,residentConfirmationAt:stamp(),
+      privacyScope:"admin_and_assigned_responder",
+      requiredVolunteers:0,assignedVolunteersCount:0,
+      assignedVolunteerIds:[],adminNote:"",
+      validatedAt:null,validatedBy:null,assignedAt:null,
+      resolvedAt:null,closedAt:null,createdAt:stamp(),updatedAt:stamp(),
+    }));
+    await assertFails(getDoc(doc(volunteer,"disasterCases",CASE)));
+    await assertSucceeds(updateDoc(incidentRef,{
+      status:"validated",verificationStatus:"validated",evidenceReviewStatus:"approved",
+      validatedAt:stamp(),validatedBy:ADMIN,updatedAt:stamp(),
+    }));
 
     // Admin offers the task; case has no barangay.
     await assertSucceeds(setDoc(assignmentRef,{
@@ -138,7 +165,7 @@ async function main() {
       status:"resolved",resolvedAt:stamp(),updatedAt:stamp(),
     }));
     assert.equal((await assertSucceeds(getDoc(incidentRef))).data().status,"resolved");
-    console.log("PASS: synthetic manual Admin offer → Volunteer accept → GPS share/stop → On Site → one-tap completion → Resident fully helped → Admin resolved");
+    console.log("PASS: synthetic Resident report → Admin review/offer → Volunteer accept → GPS share/stop → On Site → one-tap completion → Resident fully helped → Admin resolved");
   } finally {
     await env.cleanup();
   }
