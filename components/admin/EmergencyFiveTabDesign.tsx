@@ -297,45 +297,41 @@ export function ReferenceHistory({ incident, assignments, formatDate }: {
 
 
 export function ReferenceVolunteerMatching({ incident, verificationStatus, caseBarangay,
-  eligibleCount, activeAssignments, allAssignments=[], automaticStatus, onCancelAssignment }: {
+  eligibleCount, activeAssignments, allAssignments=[], onCancelAssignment }: {
   incident: AdminCaseView;
   verificationStatus: string;
   caseBarangay: string;
   eligibleCount: number;
   activeAssignments: AdminAssignmentView[];
   allAssignments?: AdminAssignmentView[];
-  automaticStatus?: string;
   onCancelAssignment?: (assignment: AdminAssignmentView) => void;
 }) {
   const offers=allAssignments.length ? allAssignments : activeAssignments;
   const pending=offers.filter(x=>x.status==="offered").length;
   const accepted=offers.filter(x=>["accepted","responding","on_site","completed"].includes(x.status)).length;
   const declined=offers.filter(x=>x.status==="declined").length;
-  const autoOffers=offers.filter(x=>x.createdBy==="automatic_matching_engine").length;
-  const autoActive=automaticStatus && !["disabled","off","needs_admin"].includes(automaticStatus);
   const ready=verificationStatus==="validated" && ["validated","assigned","in_progress"].includes(incident.status);
   return <View style={styles.page}>
     <View style={styles.autoIntro}>
       <View style={styles.autoIntroHeading}>
-        <Heading level="page" icon="♧" title="Automatic Volunteer Assignment"
-          sub="Offer tasks to eligible Volunteers. Each responder must Accept or Decline."/>
+        <Heading level="page" icon="♧" title="Manual Volunteer Assignment"
+          sub="Select an eligible Volunteer below and send an individual task offer."/>
         <Text style={styles.autoIntroStatus}>
-          {autoActive ? "Matching state: "+cap(automaticStatus || "")
-            : "Production automatic fan-out is not enabled"}
+          Admin-controlled assignment · Incident barangay: {caseBarangay || "Not provided"}
         </Text>
       </View>
       <View style={styles.autoIntroRules}>
-        <Text style={styles.autoIntroRule}>✓ Match verified skills and availability</Text>
-        <Text style={styles.autoIntroRule}>✓ Same barangay → nearby → SJDM-wide</Text>
-        <Text style={styles.autoIntroRule}>✓ Record offers, acceptance, declines and activity</Text>
+        <Text style={styles.autoIntroRule}>✓ Admin chooses an eligible Volunteer</Text>
+        <Text style={styles.autoIntroRule}>✓ Volunteer accepts or declines the offer</Text>
+        <Text style={styles.autoIntroRule}>✓ Tracking starts only after the Volunteer starts the task</Text>
       </View>
     </View>
     <View style={styles.kpiRow}>
       {[
-        ["Eligible in Barangay",ready ? String(eligibleCount) : "—",
-          "Approved candidates for this incident barangay"],
+        ["Eligible Volunteers",ready ? String(eligibleCount) : "—",
+          "Candidates approved for this incident"],
         ["Task Offers",String(offers.length),
-          "Recorded offers, not assumed automatic assignments"],
+          "Existing offers for this incident"],
         ["Pending Acceptance",String(pending),"Waiting for Volunteer response"],
         ["Accepted / Responding",String(accepted),"Accepted response tasks"],
         ["Declined",String(declined),"Volunteers who declined"],
@@ -347,23 +343,9 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
         </View>)}
     </View>
     <Card>
-      <Heading icon="▤" title="Matching Coverage"
-        sub="The engine can expand to the next configured wave when the current one has no available responders."/>
-      <View style={styles.waveRow}>
-        {[
-          ["01","Same Barangay",caseBarangay || "Incident barangay"],
-          ["02","Nearby Barangays","Configured neighboring SJDM barangays"],
-          ["03","SJDM Citywide","Other qualified city volunteers"],
-        ].map(([wave,title,area])=>
-          <View key={wave} style={styles.waveTile}>
-            <Text style={styles.waveNumber}>WAVE {wave}</Text>
-            <Text style={styles.waveTitle}>{title}</Text>
-            <Text style={styles.muted}>{area}</Text>
-          </View>)}
-      </View>
-      <Text style={styles.smallFinePrint}>
-        Wave eligibility and dispatch confirmation must come from server-side records, not this design.
-      </Text>
+      <Heading icon="▤" title="Manual Selection"
+        sub="Use the Volunteer Directory below. Only eligible candidates can receive an offer."/>
+      <Text style={styles.muted}>After Admin approval: choose a Volunteer → Offer Task → Volunteer Accept / Decline → Start Task for live GPS tracking.</Text>
     </Card>
     <Card>
       <Heading icon="♧" title={"Volunteer Task Offers ("+offers.length+")"}
@@ -395,7 +377,7 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
               </View>
             </View>
             <Text style={[styles.volunteerCell,{flex:1.5}]}>
-              {x.createdBy==="automatic_matching_engine" ? "Automatic offer" : "Recorded task"}
+              {x.createdBy==="automatic_matching_engine" ? "Earlier task offer" : "Admin task offer"}
             </Text>
             <View style={[styles.volunteerStatus,
               x.status==="declined"?styles.redTint:
@@ -414,8 +396,7 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
         </View>}
     </Card>
     <Text style={styles.smallFinePrint}>
-      {autoOffers} of {offers.length} recorded tasks were created by the automatic matching engine.
-      Task offered is not the same as Volunteer accepted.
+      An offer is not an accepted assignment. Only an accepted and started task can activate live GPS tracking.
     </Text>
   </View>;
 }
