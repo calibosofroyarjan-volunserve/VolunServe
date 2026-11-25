@@ -1,0 +1,158 @@
+name: Original AI Isolated Python Staging Candidate QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-isolated-python-candidate-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-python:
+    name: Live Python parity and staging fail-closed startup tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download only exact candidate source via read-only GitHub API
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs');
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='319152e6a1cad5e54653c20e87bd1551a82b219e';
+            const diff=await github.rest.repos.compareCommits({
+              owner,repo,base,head:context.sha
+            });
+            assert.equal(diff.data.behind_by,0,'Staging Python lost deployed live functionality');
+            const allow=[
+              'identity-ai/main.py',
+              'identity-ai/staging_original_ai_isolation.py',
+              '.github/workflows/qa-original-ai-isolated-python-candidate-20261125.yml'
+            ];
+            const changed=(diff.data.files||[]).map(v=>v.filename).sort();
+            assert.deepEqual(changed,allow.slice().sort(),
+              'Only startup isolation and dedicated QA workflow may change');
+            const read=async(filename,ref)=>{
+              const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
+              assert.equal(data.encoding,'base64','Unexpected source encoding');
+              return Buffer.from(data.content,'base64').toString('utf8');
+            };
+            const [liveMain,candidateMain,guard]=await Promise.all([
+              read('identity-ai/main.py',base),
+              read('identity-ai/main.py',context.sha),
+              read('identity-ai/staging_original_ai_isolation.py',context.sha)
+            ]);
+            const anchor='from PIL import Image, ImageOps\napp = FastAPI(';
+            const replacement=[
+              'from PIL import Image, ImageOps',
+              'from staging_original_ai_isolation import assert_original_ai_staging_isolated',
+              '',
+              '# Staging-only startup gate. The exact protected production Python startup',
+              '# remains unchanged unless this process is explicitly identified as staging.',
+              'assert_original_ai_staging_isolated()',
+              '',
+              'app = FastAPI('
+            ].join('\n');
+            assert.equal((liveMain.split(anchor).length-1),1);
+            assert.equal(candidateMain,liveMain.replace(anchor,replacement),
+              'Deployed Python media/ID/FaceMesh code must be BYTE-FOR-BYTE preserved');
+            assert.match(guard,/def assert_original_ai_staging_isolated\(/);
+            fs.mkdirSync('qa-python',{recursive:true});
+            fs.writeFileSync('qa-python/main.py',candidateMain);
+            fs.writeFileSync('qa-python/staging_original_ai_isolation.py',guard);
+            core.info('PASS: pinned live Python source: only one import and startup call added');
+            core.info('PASS: 3 allowlisted files, 0 behind, no deployed service contact');
+      - name: Test isolated Python startup policy with synthetic configuration only
+        run: |
+          python - <<'PY'
+          import ast
+          import hashlib
+          import importlib.util
+          from pathlib import Path
+
+          guard_path=Path('qa-python/staging_original_ai_isolation.py')
+          main_path=Path('qa-python/main.py')
+          compile(guard_path.read_text(),'staging_original_ai_isolation.py','exec')
+          compile(main_path.read_text(),'main.py','exec')
+          spec=importlib.util.spec_from_file_location('guard_under_test',guard_path)
+          m=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          gate=m.assert_original_ai_staging_isolated
+          tree=ast.parse(main_path.read_text())
+          nodes=tree.body
+          guard_call=next(i for i,n in enumerate(nodes)
+                          if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call)
+                          and isinstance(n.value.func,ast.Name)
+                          and n.value.func.id=='assert_original_ai_staging_isolated')
+          app_call=next(i for i,n in enumerate(nodes)
+                        if isinstance(n,ast.Assign) and any(
+                          isinstance(t,ast.Name) and t.id=='app' for t in n.targets))
+          assert guard_call<app_call,'Staging guard must execute before app construction'
+          print('PASS: exact Python main parses, staging guard precedes FastAPI app')
+          checks=0
+          live_name='volunserve-identity-ai'
+          fake_staging_key='synthetic-isolated-staging-internal-key-not-a-secret-20261125'
+          fake_production_key='synthetic-production-reference-key-not-a-secret-20261125'
+          fingerprint=lambda s:hashlib.sha256(s.encode()).hexdigest()
+          baseline={
+            'RENDER_SERVICE_NAME':'volunserve-identity-ai-staging',
+            'VOLUNSERVE_DEPLOYMENT_ENV':'staging',
+            'VOLUNSERVE_STAGING_STRICT':'true',
+            'VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID':'demo-independent-staging-firebase',
+            'VOLUNSERVE_STAGING_BACKEND_URL':'https://volunserve-backend-staging.onrender.com',
+            'IDENTITY_AI_INTERNAL_KEY':fake_staging_key,
+            'VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256':fingerprint(fake_staging_key),
+            'VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256':fingerprint(fake_production_key),
+            'GOOGLE_CLOUD_PROJECT':'demo-independent-staging-firebase',
+            'ALLOWED_ORIGINS':'http://localhost:8081'
+          }
+          gate(baseline)
+          print('PASS: all required distinct synthetic staging declarations permit startup')
+          scenarios=[
+            ('strict flag missing',{'VOLUNSERVE_STAGING_STRICT':''}),
+            ('environment mode production',{'VOLUNSERVE_DEPLOYMENT_ENV':'production'}),
+            ('Python service uses production name',{'RENDER_SERVICE_NAME':live_name}),
+            ('staging Firebase project missing',{'VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID':''}),
+            ('staging Firebase points to live project',{'VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID':'volunserve-3aa5b'}),
+            ('staging Firebase project malformed',{'VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID':'!bad project'}),
+            ('staging backend is live',{'VOLUNSERVE_STAGING_BACKEND_URL':'https://volunserve.onrender.com'}),
+            ('staging backend URL missing',{'VOLUNSERVE_STAGING_BACKEND_URL':''}),
+            ('service account JSON inherited',{'FIREBASE_SERVICE_ACCOUNT_JSON':'synthetic-invalid-json-not-a-credential'}),
+            ('Google auth keyfile inherited',{'GOOGLE_APPLICATION_CREDENTIALS':'/fake/path'}),
+            ('Cloudinary name inherited',{'CLOUDINARY_CLOUD_NAME':'netjawtz'}),
+            ('Cloudinary API key inherited',{'CLOUDINARY_API_KEY':'DUMMY_NOT_REAL'}),
+            ('Cloudinary API secret inherited',{'CLOUDINARY_API_SECRET':'DUMMY_NOT_REAL'}),
+            ('Cloudinary URL inherited',{'CLOUDINARY_URL':'cloudinary://fake'}),
+            ('Google Cloud project disagrees',{'GOOGLE_CLOUD_PROJECT':'volunserve-3aa5b'}),
+            ('internal backend key missing',{'IDENTITY_AI_INTERNAL_KEY':''}),
+            ('internal backend key weak',{'IDENTITY_AI_INTERNAL_KEY':'test'}),
+            ('internal backend key shorter than 32',{'IDENTITY_AI_INTERNAL_KEY':'A'*20}),
+            ('internal key fingerprint missing',{'VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256':''}),
+            ('production key fingerprint missing',{'VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256':''}),
+            ('internal key fingerprint invalid',{'VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256':'nonsense'}),
+            ('internal key changed',{'IDENTITY_AI_INTERNAL_KEY':'A'*44}),
+            ('production fingerprint same as staging',{'VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256':fingerprint(fake_staging_key)}),
+            ('production web origin explicitly allowed',{'ALLOWED_ORIGINS':'https://volunserve.com'}),
+            ('production Firebase Hosting origin allowed',{'ALLOWED_ORIGINS':'https://volunserve-3aa5b.web.app'})
+          ]
+          for label,override in scenarios:
+              try:
+                  gate({**baseline,**override})
+              except RuntimeError as e:
+                  assert 'staging isolation blocked' in str(e),label
+              else:
+                  raise AssertionError('Unsafe staging setup was not blocked: '+label)
+              checks+=1
+          print('PASS:',checks,'unsafe staging configurations rejected (fail closed)')
+          gate({'RENDER_SERVICE_NAME':live_name,
+                'VOLUNSERVE_DEPLOYMENT_ENV':'production',
+                'CLOUDINARY_CLOUD_NAME':'netjawtz'})
+          gate({})
+          print('PASS: real production-style env and local development env are unchanged')
+          print('PASS: Python staging guard',checks,'negative cases; no biometric/runtime/hosted service calls')
+          PY
+# Candidate QA only; no SDK credentials, no live/staging Render request,
+# no Firebase writes, no actual biometric/ID media, no production deployment.
