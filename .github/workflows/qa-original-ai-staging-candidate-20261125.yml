@@ -1,0 +1,102 @@
+name: Original AI Isolated Staging Candidate QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-isolated-staging-candidate-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-ai-isolation:
+    name: Live-backed staging guard and source diff (offline, no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Read immutable deployed Node base and candidate files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner,repo}=context.repo;
+            const assert=require('node:assert/strict');
+            const base='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const compare=await github.rest.repos.compareCommits({
+              owner,repo,base,head:context.sha
+            });
+            assert.equal(compare.data.behind_by,0,'Candidate has lost newer production Node changes');
+            const allow=[
+              'backend/firebaseAdmin.js',
+              'backend/stagingOriginalAiIsolationPolicy.js',
+              '.github/workflows/qa-original-ai-staging-candidate-20261125.yml'
+            ];
+            const files=(compare.data.files||[]).map(file=>file.filename);
+            assert.deepEqual(files.slice().sort(),allow.slice().sort(),
+              'Only staging startup guard and QA workflow may differ from pinned live Node');
+            core.info('PASS: current deployed Node SHA pinned; exactly 3 allowlisted files changed');
+            const read=async(filename,ref)=>{
+              const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
+              assert.equal(data.encoding,'base64');
+              return Buffer.from(data.content,'base64').toString('utf8');
+            };
+            const [policy,admin,beforeAdmin]=await Promise.all([
+              read('backend/stagingOriginalAiIsolationPolicy.js',context.sha),
+              read('backend/firebaseAdmin.js',context.sha),
+              read('backend/firebaseAdmin.js',base)
+            ]);
+            assert.notEqual(admin,beforeAdmin,'Backend startup must have staging-only guard');
+            assert.match(admin,/assertOriginalAiStagingIsolation\(process\.env,\s*serviceAccount\)/);
+            assert.match(admin,/if \(existingApps\.length > 0\) \{[\s\S]*?assertOriginalAiStagingIsolation\(env,\s*getServiceAccount\(\)\)/);
+            const module={exports:{}};
+            new Function('module',policy)(module);
+            const guard=module.exports.assertOriginalAiStagingIsolation;
+            assert.equal(typeof guard,'function');
+            const env={
+              RENDER_SERVICE_NAME:'volunserve-backend-staging',
+              VOLUNSERVE_STAGING_STRICT:'true',
+              VOLUNSERVE_DEPLOYMENT_ENV:'staging',
+              VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:'demo-distinct-staging-firebase',
+              IDENTITY_AI_SERVICE_URL:'https://volunserve-identity-ai-staging.onrender.com',
+              VOLUNSERVE_STAGING_CLOUDINARY_CLOUD_NAME:'demo-distinct-staging-cloud',
+              CLOUDINARY_CLOUD_NAME:'demo-distinct-staging-cloud',
+              CLOUDINARY_API_KEY:'DEMO_DUMMY_KEY_NOT_A_CREDENTIAL',
+              CLOUDINARY_API_SECRET:'DEMO_DUMMY_SECRET_NOT_A_CREDENTIAL',
+            };
+            const serviceAccount={project_id:'demo-distinct-staging-firebase'};
+            assert.doesNotThrow(()=>guard(env,serviceAccount));
+            core.info('PASS: correctly configured synthetic separate staging projects may initialize');
+            const deny=[
+              ['strict missing',{VOLUNSERVE_STAGING_STRICT:''},serviceAccount],
+              ['deployment not staging',{VOLUNSERVE_DEPLOYMENT_ENV:'production'},serviceAccount],
+              ['service name not staging',{RENDER_SERVICE_NAME:'VolunServe'},serviceAccount],
+              ['production Firebase declared',{VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:'volunserve-3aa5b'},serviceAccount],
+              ['production Firebase credential',{}, {project_id:'volunserve-3aa5b'}],
+              ['mismatched Firebase credential',{}, {project_id:'demo-unrelated-firebase'}],
+              ['missing Firebase credential',{}, null],
+              ['production AI URL',{IDENTITY_AI_SERVICE_URL:'https://volunserve-identity-ai.onrender.com'},serviceAccount],
+              ['Cloudinary missing',{CLOUDINARY_CLOUD_NAME:''},serviceAccount],
+              ['Cloudinary same as production default',{CLOUDINARY_CLOUD_NAME:'netjawtz',VOLUNSERVE_STAGING_CLOUDINARY_CLOUD_NAME:'netjawtz'},serviceAccount],
+              ['Cloudinary mismatched cloud',{CLOUDINARY_CLOUD_NAME:'demo-other-cloud'},serviceAccount],
+              ['Cloudinary same as declared prod',{VOLUNSERVE_PRODUCTION_CLOUDINARY_CLOUD_NAME:'demo-distinct-staging-cloud'},serviceAccount],
+              ['Cloudinary API key absent',{CLOUDINARY_API_KEY:''},serviceAccount],
+              ['Cloudinary API secret absent',{CLOUDINARY_API_SECRET:''},serviceAccount]
+            ];
+            for(const [label,overrides,account] of deny){
+              assert.throws(()=>guard({...env,...overrides},account),/staging isolation blocked/,
+                'Fail closed: '+label);
+            }
+            core.info('PASS: '+deny.length+' unsafe staging configuration variations refused');
+            // The production path cannot acquire new startup requirements.
+            assert.doesNotThrow(()=>guard({
+              RENDER_SERVICE_NAME:'VolunServe',
+              VOLUNSERVE_DEPLOYMENT_ENV:'production',
+              CLOUDINARY_CLOUD_NAME:'netjawtz'
+            },null));
+            assert.doesNotThrow(()=>guard({},null));
+            core.info('PASS: unchanged live production path has no new startup requirement');
+            core.summary.addHeading('Original AI isolated staging candidate — tests PASS');
+            core.summary.addRaw('Live Node base: '+base+'; candidate: '+context.sha+'.\n\n',true);
+            core.summary.addRaw('**'+deny.length+'** staging fail-closed cases passed; explicitly separate synthetic staging configuration accepted; production path unchanged.\n\n',true);
+            core.summary.addRaw('**RELEASE STILL BLOCKED:** no real Firebase/Cloudinary credentials were read, independently authenticated, or installed; current deployed staging services are older. A different cloud name and two dummy keys in this test do NOT prove independent provider accounts.\n\n',true);
+            core.summary.addRaw('NO DEPLOY, NO FIREBASE/CLOUDINARY WRITES, NO REAL ID DATA, NO BRANCH MERGE.\n',true);
+            await core.summary.write();
+# Only candidate branch code is validated: no existing live Render or Firebase
+# service is changed, nor are staging secrets discovered or exposed.
