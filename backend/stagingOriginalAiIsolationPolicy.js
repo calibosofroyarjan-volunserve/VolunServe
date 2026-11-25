@@ -1,4 +1,5 @@
 "use strict";
+const crypto = require("node:crypto");
 
 /**
  * QA-only candidate for the original-AI backend, based on the exact currently
@@ -53,6 +54,21 @@ function assertOriginalAiStagingIsolation(env, serviceAccount) {
       !String(vars.CLOUDINARY_API_KEY || "").trim() ||
       !String(vars.CLOUDINARY_API_SECRET || "").trim()) {
     throw new Error("Original AI staging isolation blocked: separate authenticated Cloudinary cloud and credentials required.");
+  }
+
+  // The Node→Python private API must not silently inherit the live key.
+  // Compare SHA-256 fingerprints, never log or expose the actual key.
+  const key = String(vars.IDENTITY_AI_INTERNAL_KEY || "").trim();
+  const stagingFingerprint = String(vars.VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256 || "").trim().toLowerCase();
+  const productionFingerprint = String(vars.VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256 || "").trim().toLowerCase();
+  const fingerprintFormat = /^[a-f0-9]{64}$/;
+  const computed = crypto.createHash("sha256").update(key, "utf8").digest("hex");
+  if (key.length < 32 ||
+      !fingerprintFormat.test(stagingFingerprint) ||
+      !fingerprintFormat.test(productionFingerprint) ||
+      !crypto.timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(stagingFingerprint || "00".repeat(32), "hex")) ||
+      crypto.timingSafeEqual(Buffer.from(stagingFingerprint, "hex"), Buffer.from(productionFingerprint, "hex"))) {
+    throw new Error("Original AI staging isolation blocked: private backend API key must be strong and independent of production.");
   }
 }
 module.exports = { assertOriginalAiStagingIsolation };
