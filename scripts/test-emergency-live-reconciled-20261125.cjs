@@ -61,11 +61,11 @@ test("Resident and Volunteer screens never trigger automatic Volunteer fan-out",
   assert.match(admin,/automaticStatus="off"/);
 });
 
-test("latest observed deployed Render auto-invite controller stays off without explicit production approvals",()=>{
+test("latest observed deployed Render auto-invite controller stays off without explicit production approvals",async()=>{
   // Read the latest read-only Render live deploy commit (2026-11-25). Do not use production
   // credentials, modify env settings, or call any actual API endpoints.
   const {execFileSync}=require("node:child_process");
-  const release="d3308da6107f517061f5022997a229de9d05a0cb";
+  const release="c4d133c6aa7ab1a8a60810ade8e460302a61818f";
   const source=execFileSync("git",["show",release+":backend/renderEmergencyAutoInvites.js"],{
     encoding:"utf8",timeout:20000,maxBuffer:1024*1024
   });
@@ -89,6 +89,43 @@ test("latest observed deployed Render auto-invite controller stays off without e
   assert.equal(config({...production,VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"}).enabled,false);
   assert.equal(config({...production,VOLUNSERVE_RENDER_AUTO_ENABLED:"true",
     VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"}).enabled,true);
+  // Synthetic disabled-mode engine must return BEFORE touching any Firestore
+  // document. Merely mounting backend routes may not silently fan out tasks.
+  // These checks never connect to Render or a real Firebase project.
+  const neverReadDB=new Proxy({}, {
+    get(_target,key){throw Error("Disabled auto-invite accessed Firestore: "+String(key));}
+  });
+  const syntheticFieldValue={serverTimestamp:()=>({synthetic:true})};
+  for(const env of [
+    {},
+    production,
+    {...production,VOLUNSERVE_RENDER_AUTO_ENABLED:"true"},
+    {...production,VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"},
+    {...production,VOLUNSERVE_RENDER_AUTO_ENABLED:"TRUE",
+      VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"},
+    {...production,VOLUNSERVE_RENDER_AUTO_PROJECT_ID:"other-project",
+      VOLUNSERVE_RENDER_AUTO_ENABLED:"true",
+      VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"},
+    {FIREBASE_SERVICE_ACCOUNT_JSON:"not-json",
+      VOLUNSERVE_RENDER_AUTO_ENABLED:"true",
+      VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"},
+  ]){
+    const engine=m.exports.makeEngine({db:neverReadDB,
+      FieldValue:syntheticFieldValue,env});
+    assert.equal(engine.gate.enabled,false,
+      "Backend must require all explicit same-project production approvals");
+    const submit=await engine.submitted({
+      uid:"qa-resident",caseId:"qa-manual-case",
+      profile:{role:"resident",status:"approved",residentAccess:true}
+    });
+    const respond=await engine.respond({
+      uid:"qa-volunteer",caseId:"qa-manual-case",decision:"accepted"
+    });
+    assert.equal(submit.status,"disabled",
+      "Disabled Render must never write automatic response offers");
+    assert.equal(respond.status,"disabled",
+      "Disabled Render must never alter volunteer task decisions");
+  }
   // Gate source behavior is established; deployed env values remain UNKNOWN.
 });
 
