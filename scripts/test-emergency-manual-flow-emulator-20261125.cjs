@@ -116,7 +116,30 @@ async function main() {
     }));
     await assertSucceeds(setDoc(gpsRef,payload));
     await assertSucceeds(getDoc(doc(resident,"responseLocations",VOLUNTEER)));
+    await assertSucceeds(getDoc(doc(admin,"responseLocations",VOLUNTEER)));
     await assertFails(getDoc(doc(outsider,"responseLocations",VOLUNTEER)));
+
+    // GPS privacy regression: active case ownership permits the exact assigned
+    // document only. Never allow public collection scans, anonymous reads,
+    // forged volunteers, mismatched assignments, or extra location data.
+    const anonymous = env.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(anonymous,"responseLocations",VOLUNTEER)));
+    await assertFails(getDocs(collection(resident,"responseLocations")));
+    await assertFails(getDocs(collection(outsider,"responseLocations")));
+    await assertFails(setDoc(doc(resident,"responseLocations",VOLUNTEER),payload));
+    await assertFails(setDoc(doc(volunteer,"responseLocations",OUTSIDER),{
+      ...payload,volunteerId:OUTSIDER,
+    }));
+    await assertFails(setDoc(gpsRef,{...payload,assignmentId:"qa-unlinked"}));
+    await assertFails(setDoc(gpsRef,{...payload,caseId:"qa-unrelated"}));
+    await assertFails(setDoc(gpsRef,{...payload,accuracy:"20"}));
+    await assertFails(setDoc(gpsRef,{...payload,privateAddress:"should-not-be-stored"}));
+    // Failed updates must not corrupt the last legitimate tracking payload.
+    const stillValid = (await assertSucceeds(getDoc(gpsRef))).data();
+    assert.equal(stillValid.assignmentId,OFFER);
+    assert.equal(stillValid.caseId,CASE);
+    assert.equal(stillValid.volunteerId,VOLUNTEER);
+    console.log("PASS: GPS privacy — assigned Resident/Admin document read only, no anonymous/cross-case/bulk reads or forged writes");
 
     await assertSucceeds(updateDoc(ownAssignment,{
       status:"on_site",updatedAt:stamp(),arrivedAt:stamp(),
