@@ -1,4 +1,4 @@
-# Post failed production Hosting release: read-only audit of unchanged live revision and existing Cloudinary.
+# Post-success live verification: exact Hosting original face-only web revision and private routes.
 name: VolunServe Original AI Live Release Marker Check (GET ONLY)
 on:
   push:
@@ -9,6 +9,8 @@ permissions:
 jobs:
   live-get-only:
     runs-on: ubuntu-latest
+    env:
+      VOLUNSERVE_EXPECTED_SHA: e8bb5308b1e0bbd477d0c6721aee83a66ebd2dde
     timeout-minutes: 9
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +50,23 @@ jobs:
               if(safe.ok!==true)throw Error("Unhealthy "+name);
             }
           })().catch(e=>{console.error("Health read failed: "+e.message);process.exitCode=1});
+          JS
+      - name: Check live original face-only route is protected for anonymous callers
+        run: |
+          node - <<'JS'
+          const checks=[
+            ["python face-only private","https://volunserve-identity-ai.onrender.com/verify-face-only","POST"],
+            ["node face-only auth","https://volunserve.onrender.com/api/identity/verify-face-only","POST"],
+            ["node face-only health auth","https://volunserve.onrender.com/api/identity/face-engine-health","GET"],
+            ["admin review","https://volunserve.onrender.com/api/admin/identity/reviews","GET"]
+          ];
+          (async()=>{
+            for(const [name,url,method] of checks){
+              const r=await fetch(url,{method,redirect:"error",signal:AbortSignal.timeout(45000)});
+              if(r.status!==401)throw Error("FAIL "+name+" expected anonymous 401 got HTTP "+r.status);
+              console.log("PASS ANONYMOUS_DENIED",name,r.status);
+            }
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
           JS
       - name: No deploy boundary
         run: |
