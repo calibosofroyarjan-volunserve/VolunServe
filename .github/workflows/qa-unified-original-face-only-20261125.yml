@@ -125,4 +125,5 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npx tsc --noEmit --pretty false
       - name: No Firebase Hosting deployment marker
-        run: echo 'PASS NO DEPLOY: same screenshot UI, no Firebase Hosting or credentials used'
+        run: |
+          echo 'PASS NO DEPLOY: same screenshot UI, no Firebase Hosting or credentials used'
