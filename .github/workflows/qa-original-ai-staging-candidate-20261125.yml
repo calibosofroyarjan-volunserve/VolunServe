@@ -26,12 +26,13 @@ jobs:
             const allow=[
               'backend/firebaseAdmin.js',
               'backend/stagingOriginalAiIsolationPolicy.js',
-              '.github/workflows/qa-original-ai-staging-candidate-20261125.yml'
+              '.github/workflows/qa-original-ai-staging-candidate-20261125.yml',
+              '.github/workflows/qa-original-ai-cross-service-20261125.yml'
             ];
             const files=(compare.data.files||[]).map(file=>file.filename);
             assert.deepEqual(files.slice().sort(),allow.slice().sort(),
               'Only staging startup guard and QA workflow may differ from pinned live Node');
-            core.info('PASS: current deployed Node SHA pinned; exactly 3 allowlisted files changed');
+            core.info('PASS: pinned production Node and exactly 4 allowable candidate/QA files');
             const read=async(filename,ref)=>{
               const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
               assert.equal(data.encoding,'base64');
@@ -46,10 +47,17 @@ jobs:
             assert.match(admin,/assertOriginalAiStagingIsolation\(process\.env,\s*serviceAccount\)/);
             assert.match(admin,/if \(existingApps\.length > 0\) \{[\s\S]*?assertOriginalAiStagingIsolation\(env,\s*getServiceAccount\(\)\)/);
             const module={exports:{}};
-            new Function('module',policy)(module);
+            new Function('module','require',policy)(module,require);
             const guard=module.exports.assertOriginalAiStagingIsolation;
             assert.equal(typeof guard,'function');
+            const crypto=require('node:crypto');
+            const fakeStagingKey='synthetic-qa-staging-node-python-key-not-a-real-secret-20261125';
+            const fakeProdKey='synthetic-qa-production-reference-not-a-real-secret-20261125';
+            const sha=value=>crypto.createHash('sha256').update(value).digest('hex');
             const env={
+              IDENTITY_AI_INTERNAL_KEY:fakeStagingKey,
+              VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256:sha(fakeStagingKey),
+              VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256:sha(fakeProdKey),
               RENDER_SERVICE_NAME:'volunserve-backend-staging',
               VOLUNSERVE_STAGING_STRICT:'true',
               VOLUNSERVE_DEPLOYMENT_ENV:'staging',
@@ -77,7 +85,14 @@ jobs:
               ['Cloudinary mismatched cloud',{CLOUDINARY_CLOUD_NAME:'demo-other-cloud'},serviceAccount],
               ['Cloudinary same as declared prod',{VOLUNSERVE_PRODUCTION_CLOUDINARY_CLOUD_NAME:'demo-distinct-staging-cloud'},serviceAccount],
               ['Cloudinary API key absent',{CLOUDINARY_API_KEY:''},serviceAccount],
-              ['Cloudinary API secret absent',{CLOUDINARY_API_SECRET:''},serviceAccount]
+              ['Cloudinary API secret absent',{CLOUDINARY_API_SECRET:''},serviceAccount],
+              ['Internal AI key absent',{IDENTITY_AI_INTERNAL_KEY:''},serviceAccount],
+              ['Internal AI key short',{IDENTITY_AI_INTERNAL_KEY:'weak'},serviceAccount],
+              ['Internal AI fingerprint absent',{VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256:''},serviceAccount],
+              ['Production AI fingerprint absent',{VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256:''},serviceAccount],
+              ['Internal AI fingerprint malformed',{VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256:'malformed'},serviceAccount],
+              ['Internal AI key mismatch',{IDENTITY_AI_INTERNAL_KEY:'totally-different-fake-long-qa-key-20261125'},serviceAccount],
+              ['Internal AI fingerprint same as production',{VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256:sha(fakeStagingKey)},serviceAccount]
             ];
             for(const [label,overrides,account] of deny){
               assert.throws(()=>guard({...env,...overrides},account),/staging isolation blocked/,
