@@ -670,6 +670,14 @@ export default function MapTracking() {
       }
 
       watchingRef.current = false;
+      // This map owns only foreground, case-specific Volunteer GPS sharing.
+      // Best-effort revoke the pin when the map is closed; readers also
+      // enforce task status and freshness in case the device is offline.
+      const activeTask = activeEmergencyTaskRef.current;
+      activeEmergencyTaskRef.current = null;
+      if (activeTask && CURRENT_USER_ID) {
+        void deleteDoc(doc(db, "responseLocations", CURRENT_USER_ID)).catch(() => {});
+      }
 
       firestoreUnsubscribersRef.current.forEach((unsubscribe) => {
         try {
