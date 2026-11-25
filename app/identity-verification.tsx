@@ -414,7 +414,30 @@ export default function IdentityVerification() {
         setDocumentPrecheckMessage(result.message);
         setLocalMessage(result.outcome === "review" ? result.message : "");
         if (result.outcome === "retry") return;
-        // Blurry National ID cases may proceed solely for Admin rescan review.
+        if (result.outcome === "review") {
+          // An ID-only OCR review has no selfie and consumes no face attempt.
+          // Only show Pending when the authenticated backend confirms its
+          // Admin-review queue entry. Never open the selfie camera here.
+          setSelfie(null);
+          setCameraReady(false);
+          if (result.status === "pending") {
+            setStatusResult({
+              identityStatus: "pending",
+              identityVerified: false,
+              verificationId: result.verificationId,
+              decision: result.decision,
+              documentScreening: result.documentScreening,
+              message: result.message,
+            });
+            setStep(3);
+          } else {
+            setDocumentPrecheckMessage(
+              "The scan needs Admin review, but a pending record was not confirmed. Check your status before retrying. No face scan was started.",
+            );
+          }
+          return;
+        }
+        // Only a recognized, passing ID precheck can enter face capture.
         setSelfie(null);
         setCameraReady(false);
         setStep(2);
