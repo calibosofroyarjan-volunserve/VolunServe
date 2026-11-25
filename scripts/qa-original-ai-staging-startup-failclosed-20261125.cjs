@@ -126,12 +126,37 @@ blocked("Staging missing Cloudinary secret rejected",{
 blocked("Staging missing internal API key rejected",{
   IDENTITY_AI_INTERNAL_KEY:""
 });
+blocked("Staging Cloudinary URL could override selected cloud and credentials",{
+  CLOUDINARY_URL:"cloudinary://SYNTHETIC_KEY:SYNTHETIC_SECRET@netjawtz"
+});
+blocked("Staging implicit Google Application Credentials file is rejected",{
+  GOOGLE_APPLICATION_CREDENTIALS:"/synthetic/prod-service-account-not-a-file.json"
+});
+blocked("Staging implicit FIREBASE_CONFIG override is rejected",{
+  FIREBASE_CONFIG:JSON.stringify({projectId:"volunserve-3aa5b"})
+});
+blocked("Staging conflicting GOOGLE_CLOUD_PROJECT is rejected",{
+  GOOGLE_CLOUD_PROJECT:"volunserve-3aa5b"
+});
+blocked("Staging conflicting GCLOUD_PROJECT is rejected",{
+  GCLOUD_PROJECT:"volunserve-3aa5b"
+});
 blocked("Staging carrying reused production private key fingerprint rejected",{
   VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256:sha(stagingKey)
 });
 blocked("Staging sharing declared fingerprint but wrong raw key rejected",{
   IDENTITY_AI_INTERNAL_KEY:"some-different-fake-key-with-at-least-32-characters"
 });
+// Matching optional Google project labels are permitted: this is only
+// consistency screening, NOT cryptographic provider account ownership proof.
+r=execute({
+  GOOGLE_CLOUD_PROJECT:fakeServiceAccount.project_id,
+  GCLOUD_PROJECT:fakeServiceAccount.project_id
+});
+assert.equal(r.ok,true);
+assert.equal(r.initialization,1);
+pass("Staging tolerates matching optional Google project labels");
+
 // Ensure an unchanged production service does not suddenly require staging
 // settings or staging credentials.
 r=execute({
@@ -152,4 +177,17 @@ r=execute({
 assert.equal(r.ok,true);
 assert.equal(r.initialization,0);
 pass("Production Firebase existingApps path unchanged");
+r=execute({
+  RENDER_SERVICE_NAME:"volunserve-backend",
+  VOLUNSERVE_DEPLOYMENT_ENV:"production",
+  VOLUNSERVE_STAGING_STRICT:"",
+  FIREBASE_SERVICE_ACCOUNT_JSON:"",
+  CLOUDINARY_URL:"cloudinary://SYNTHETIC_PROD_KEY:SYNTHETIC_PROD_SECRET@netjawtz",
+  GOOGLE_APPLICATION_CREDENTIALS:"/synthetic/production-key-not-a-file.json",
+  GOOGLE_CLOUD_PROJECT:"volunserve-3aa5b",
+  FIREBASE_CONFIG:JSON.stringify({projectId:"volunserve-3aa5b"})
+});
+assert.equal(r.ok,true);
+assert.equal(r.initialization,1);
+pass("Unchanged production permits legacy credential variables with no new startup restrictions");
 console.log("SUCCESS:",passed,"startup isolation checks, ZERO SDK calls for unsafe configurations");
