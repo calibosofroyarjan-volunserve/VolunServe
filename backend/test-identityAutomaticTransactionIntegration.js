@@ -88,7 +88,9 @@ function makeDb(lease=requestId,verified=false,userExists=true){
   };
   const writes=[];
   const db={
-    collection(name){return {doc(key){return {collection:name,id:key};}};},
+    collection(name){return {doc(key){return {collection:name,id:key,
+      get:async()=>{const value=store[name]?.[key];return {exists:value!==undefined,data:()=>value};}
+    };}};},
     async runTransaction(fn){
       const staged=[];
       const tx={
@@ -244,4 +246,63 @@ test("already verified Resident: no duplicate auto grant or second audit record"
 test("missing Resident profile: no create or grant",async()=>{
   await assert.rejects(async()=>runScenario({enabled:true,userExists:false}),
     e=>e.code==="identity_account_changed");
+});
+
+
+/* Authenticated resident status endpoint: execute its real Express handler,
+   with the SAME synthetic database that the identity transaction wrote. */
+const STATUS_START='app.get(\n  "/api/identity/status",';
+const STATUS_STOP='\n);\napp.post(';
+const statusStart=server.indexOf(STATUS_START);
+const statusEnd=server.indexOf(STATUS_STOP,statusStart+STATUS_START.length);
+assert(statusStart>0&&statusEnd>statusStart,"Actual identity status GET route missing");
+const statusRouteSource=server.slice(statusStart,statusEnd+"\n);".length);
+async function readResidentStatus(db,loggedInUid){
+  let handler;
+  vm.runInNewContext(statusRouteSource,{
+    app:{get:(path,...handlers)=>{
+      assert.equal(path,"/api/identity/status");
+      handler=handlers.at(-1);
+    }},
+    requireFirebaseUser:()=>{},
+    db,
+    normalizeIdentityStatus:v=>String(v||"basic").toLowerCase(),
+    cleanText:(v,n)=>String(v||"").slice(0,n),
+    numberOrNull:v=>typeof v==="number"?v:null,
+    identityAttemptCount:policy.identityAttemptCount,
+    MAX_IDENTITY_AI_ATTEMPTS:3,
+    normalizeIdDocumentScreening:v=>v||{},
+    console:{error:()=>{}},
+  },{timeout:2000});
+  assert.equal(typeof handler,"function");
+  const response={
+    code:200,body:undefined,
+    status(x){this.code=x;return this;},
+    json(x){this.body=x;return this;},
+  };
+  await handler({firebaseUser:{uid:loggedInUid}},response);
+  return response;
+}
+test("after trusted automatic transaction, actual Resident status GET shows Verified Resident",async()=>{
+  const {data}=await runScenario({enabled:true});
+  const response=await readResidentStatus(data.db,uid);
+  assert.equal(response.code,200);
+  assert.equal(response.body.ok,true);
+  assert.equal(response.body.identityStatus,"verified");
+  assert.equal(response.body.identityVerified,true);
+  assert.equal(response.body.requiresManualReview,false);
+});
+test("without validated providers, actual Resident status GET remains Pending Admin Review",async()=>{
+  const {data}=await runScenario({enabled:true,withoutIssuer:true});
+  const response=await readResidentStatus(data.db,uid);
+  assert.equal(response.code,200);
+  assert.equal(response.body.identityStatus,"pending");
+  assert.equal(response.body.identityVerified,false);
+  assert.equal(response.body.requiresManualReview,true);
+});
+test("resident status endpoint cannot return another Resident's identity records",async()=>{
+  const {data}=await runScenario({enabled:true});
+  const response=await readResidentStatus(data.db,"unrelatedResident456");
+  assert.equal(response.code,404);
+  assert.equal(response.body.error,"profile_not_found");
 });
