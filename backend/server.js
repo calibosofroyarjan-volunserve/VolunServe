@@ -1071,7 +1071,7 @@ function isVerifiedResidentProfile(
     (
       profile
         ?.identityVerified ===
-        true ||
+        true &&
       normalizeIdentityStatus(
         profile
           ?.identityStatus,
