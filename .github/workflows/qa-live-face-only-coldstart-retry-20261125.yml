@@ -1,0 +1,53 @@
+name: Live Face-Only Readiness Cold-Start Retry QA (NO DEPLOY)
+on:
+  push:
+    branches: [qa/live-face-only-coldstart-retry-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bounded-get-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Strict production source scope from current deployed Node
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='5d9c6aeb0a5d19f5feba9886d6d1738037869da3';
+            const d=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(d.data.behind_by,0,'Cold-start fix must not roll back live backend');
+            assert.deepEqual((d.data.files||[]).map(x=>x.filename).sort(),[
+              '.github/workflows/qa-live-face-only-coldstart-retry-20261125.yml',
+              'backend/identityAiReadiness.js',
+              'backend/server.js',
+              'backend/test-live-face-only-coldstart-20261125.cjs'
+            ].sort(),'No other backend, rules, Cloudinary or user-facing modules may change');
+            const read=async(path,ref)=>{
+              const r=await github.rest.repos.getContent({owner,repo,path,ref});
+              return Buffer.from(r.data.content,'base64').toString('utf8');
+            };
+            const [old,newVersion]=await Promise.all([
+              read('backend/server.js',base),read('backend/server.js',context.sha)
+            ]);
+            const normalize=s=>s.replace(
+              /\s*\/\/ Render Free AI can return 503 while waking\.[\s\S]*?healthRetryDelaysMs: \[6000, 12000, 18000\],\n/,
+              '\n'
+            );
+            assert.equal(normalize(old),normalize(newVersion),
+              'Unexpected server.js change beyond face-only GET readiness backoff');
+            core.info('PASS: only face-only readiness change; OCR, consent, Admin, Cloudinary, ID upload unchanged');
+      - name: Run fully synthetic idempotent GET, timeout, authorization, and legacy OCR checks
+        run: |
+          node --check backend/server.js
+          node --check backend/identityAiReadiness.js
+          node --test backend/test-live-face-only-coldstart-20261125.cjs
+      - name: No live mutation
+        run: |
+          echo 'NO DEPLOY: No real ID, selfie, Firebase/Auth token, Cloudinary, or paid provider used. Private POST never retried.'
