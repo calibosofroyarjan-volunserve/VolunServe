@@ -84,6 +84,42 @@ function assertOriginalAiStagingIsolation(env, serviceAccount) {
     throw new Error("Original AI staging isolation blocked: separate authenticated Cloudinary cloud and credentials required.");
   }
 
+  // Cloud names alone cannot establish credential isolation. Require
+  // operator-attested SHA-256 fingerprints for BOTH Cloudinary credentials
+  // and compare against an independently recorded production fingerprint.
+  // This protects against accidental prod key/secret reuse under a fake
+  // staging cloud label. It is NOT proof of Cloudinary account ownership.
+  // Do not log raw keys, secrets, expected hashes or calculated digests.
+  const cloudinaryFingerprintPairs = [
+    {
+      actual: String(vars.CLOUDINARY_API_KEY || "").trim(),
+      staging: String(vars.VOLUNSERVE_STAGING_CLOUDINARY_API_KEY_SHA256 || "").trim().toLowerCase(),
+      production: String(vars.VOLUNSERVE_PRODUCTION_CLOUDINARY_API_KEY_SHA256 || "").trim().toLowerCase(),
+    },
+    {
+      actual: String(vars.CLOUDINARY_API_SECRET || "").trim(),
+      staging: String(vars.VOLUNSERVE_STAGING_CLOUDINARY_API_SECRET_SHA256 || "").trim().toLowerCase(),
+      production: String(vars.VOLUNSERVE_PRODUCTION_CLOUDINARY_API_SECRET_SHA256 || "").trim().toLowerCase(),
+    },
+  ];
+  for (const item of cloudinaryFingerprintPairs) {
+    const validSha256 = /^[a-f0-9]{64}$/;
+    if (!item.actual || !validSha256.test(item.staging) || !validSha256.test(item.production)) {
+      throw new Error(
+        "Original AI staging isolation blocked: Cloudinary credential fingerprint attestation missing or invalid.",
+      );
+    }
+    const computed = crypto.createHash("sha256").update(item.actual, "utf8").digest();
+    const expected = Buffer.from(item.staging, "hex");
+    const production = Buffer.from(item.production, "hex");
+    if (!crypto.timingSafeEqual(computed, expected) ||
+        crypto.timingSafeEqual(expected, production)) {
+      throw new Error(
+        "Original AI staging isolation blocked: staging Cloudinary credentials do not match isolated fingerprints.",
+      );
+    }
+  }
+
   // The Node→Python private API must not silently inherit the live key.
   // Compare SHA-256 fingerprints, never log or expose the actual key.
   const key = String(vars.IDENTITY_AI_INTERNAL_KEY || "").trim();
