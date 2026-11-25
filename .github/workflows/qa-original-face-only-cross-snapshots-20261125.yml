@@ -35,6 +35,7 @@ jobs:
               check(base,context.sha,[
                 '.github/workflows/qa-original-face-only-cross-snapshots-20261125.yml',
                 'scripts/qa-original-face-only-cross-snapshots-20261125.cjs',
+                'docs/qa/original-face-only-release-status-20261125.md',
               ],'Orchestrator'),
               check(nodeBase,nodeHead,[
                 '.github/workflows/qa-original-face-only-node-20261125.yml',
