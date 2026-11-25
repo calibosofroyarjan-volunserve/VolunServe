@@ -87,10 +87,14 @@ assert.equal(r.initialization,1);
 assert.equal(r.authCalls,1);
 assert.equal(r.dbCalls,1);
 pass("Proper synthetic staging Firebase account initializes only after guard");
-r=execute({}, {options:{projectId:fakeServiceAccount.project_id}});
-assert.equal(r.ok,true);
-assert.equal(r.initialization,0);
-pass("Staging may reuse PRE-VERIFIED exact same nonproduction Firebase app");
+blocked("Preinitialized app with correct staging project label is rejected; label cannot attest credential",{},
+  {options:{projectId:fakeServiceAccount.project_id}});
+blocked("Preinitialized app with correct staging label but production credential is rejected",{},
+  {options:{projectId:fakeServiceAccount.project_id,
+    credential:{projectId:"volunserve-3aa5b"}}});
+blocked("Preinitialized app with correct staging label but opaque credential is rejected",{},
+  {options:{projectId:fakeServiceAccount.project_id,
+    credential:{type:"application-default"}}});
 blocked("Existing Firebase app with production project is rejected",{},
   {options:{projectId:"volunserve-3aa5b"}});
 blocked("Existing Firebase app without project ID is rejected",{},
