@@ -39,6 +39,9 @@ import {
     submitIdentityVerification,
 } from "../lib/identityVerification";
 
+// QA-only opt-in: historical National ID portrait vs selfie with NO OCR.
+// Disabled by default and never deployed to Hosting by this branch.
+const FACE_ONLY_MODE = process.env.EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true";
 const MEDIAPIPE_VERSION = "1.1.0";
 const MEDIAPIPE_MODULE_URL =
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -996,7 +999,7 @@ export default function IdentityVerificationWeb() {
                 setScanState(
                   tooFar ? "too_far" : "too_close",
                 );
-              } else if (movementRef.current.stage !== "complete") {
+              } else if (!FACE_ONLY_MODE && movementRef.current.stage !== "complete") {
                 // Camera-motion prompt only: replay or moved photo may still pass.
                 // Never treat this as validated liveness or presentation-attack detection.
                 const movement = movementRef.current;
@@ -1177,14 +1180,28 @@ export default function IdentityVerificationWeb() {
       setDocumentPrecheckMessage("Capture the front of your government ID first.");
       return;
     }
-    if (idType !== "passport" && !idBackDocument) {
+    if (!FACE_ONLY_MODE && idType !== "passport" && !idBackDocument) {
       setDocumentPrecheckMessage("Capture the reverse of your government ID before proceeding.");
       return;
     }
     if (!documentConsent) {
-      setDocumentPrecheckMessage(
-        "Please consent to uploading these ID photos for a preliminary OCR document check before opening the face camera.",
-      );
+      setDocumentPrecheckMessage(FACE_ONLY_MODE
+        ? "Consent to privately using your ID portrait for face comparison is required."
+        : "Please consent to uploading these ID photos for a preliminary OCR document check before opening the face camera.");
+      return;
+    }
+    if (FACE_ONLY_MODE) {
+      // Original face-only flow: skip OCR and text/name/birthday checks.
+      setDocumentPrecheckOutcome(null);
+      setDocumentPrecheckScreening(null);
+      setDocumentPrecheckMessage("");
+      setSelfie(null);
+      stopCamera();
+      setStep(2);
+      pendingFaceStartRef.current = setTimeout(() => {
+        pendingFaceStartRef.current = null;
+        void startCamera();
+      }, 250);
       return;
     }
     const revision = documentPrecheckRevisionRef.current;
@@ -1280,7 +1297,7 @@ export default function IdentityVerificationWeb() {
       return;
     }
 
-    if (idType !== "passport" && !idBackDocument) {
+    if (!FACE_ONLY_MODE && idType !== "passport" && !idBackDocument) {
       setStep(1);
       setLocalMessage("The back-side ID scan is required before submission.");
       return;
@@ -1322,7 +1339,7 @@ export default function IdentityVerificationWeb() {
           idDocument,
           idBackDocument: idType === "passport" ? null : idBackDocument,
           selfie,
-        });
+        }, { faceOnly: FACE_ONLY_MODE });
 
       setRetryingFailed(false);
       setSubmittedIdPreviewUri(idDocument.uri);
@@ -1584,6 +1601,7 @@ export default function IdentityVerificationWeb() {
 
       {step === 1 ? (
         <UploadIdStep
+          faceOnlyMode={FACE_ONLY_MODE}
           idType={idType}
           setIdType={(value) => {
             if (idType !== value) {
@@ -1658,7 +1676,7 @@ export default function IdentityVerificationWeb() {
             </View>
           </View>
 
-          {documentPrecheckScreening && documentPrecheckOutcome === "pass" ? (
+          {!FACE_ONLY_MODE && documentPrecheckScreening && documentPrecheckOutcome === "pass" ? (
             <View style={styles.idScanStepSuccess} accessibilityLabel="Completed preliminary document scan">
               <Ionicons name="checkmark-circle" size={18} color="#13724F" />
               <Text style={styles.idScanStepSuccessText}>National ID text readable</Text>
@@ -1821,10 +1839,10 @@ export default function IdentityVerificationWeb() {
                 passed={liveChecks.stable}
                 label="Face held still"
               />
-              <LiveCheck
+              {!FACE_ONLY_MODE ? <LiveCheck
                 passed={movementCompleted}
                 label="Movement prompt completed (not proof of liveness)"
-              />
+              /> : null}
 
               <View style={styles.guidanceCard}>
                 <Text
