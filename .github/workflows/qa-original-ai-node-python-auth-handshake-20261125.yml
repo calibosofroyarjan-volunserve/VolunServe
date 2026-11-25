@@ -1,0 +1,131 @@
+name: Original AI Real Node Python Private Auth Handshake (LOCAL / NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-safe-release-candidate-20261125
+    paths:
+      - scripts/qa-original-ai-node-python-auth-handshake-20261125.cjs
+      - .github/workflows/qa-original-ai-node-python-auth-handshake-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  local-private-handshake:
+    name: Pinned deployed Node readiness vs real staging-guarded Python FastAPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Obtain immutable deployed Node and original Python candidate without checkout
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs'),path=require('node:path');
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const nodeRef='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const pythonRef='319152e6a1cad5e54653c20e87bd1551a82b219e';
+            const candidateRef='b6e093065fbd207756ba5427a127a74b2bb02ba8';
+            const base='181552b3ebb2c5fad8a25caac8d542a39f5b3d68';
+            const compare=await github.rest.repos.compareCommits({
+              owner,repo,base,head:context.sha
+            });
+            assert.equal(compare.data.behind_by,0);
+            const allowed=[
+              '.github/workflows/qa-original-ai-node-python-auth-handshake-20261125.yml',
+              '.github/workflows/qa-original-ai-safe-release-gate-20261125.yml',
+              'scripts/qa-original-ai-node-python-auth-handshake-20261125.cjs'
+            ];
+            for(const file of compare.data.files||[])
+              assert.ok(allowed.includes(file.filename),'Unapproved application change '+file.filename);
+            const files=[
+              ['backend/identityAiReadiness.js',nodeRef,'identityAiReadiness.js'],
+              ['scripts/qa-original-ai-node-python-auth-handshake-20261125.cjs',context.sha,'test-handshake.js'],
+              ['identity-ai/main.py',candidateRef,'identity-ai/main.py'],
+              ['identity-ai/staging_original_ai_isolation.py',candidateRef,'identity-ai/staging_original_ai_isolation.py'],
+              ['identity-ai/document_screening.py',pythonRef,'identity-ai/document_screening.py'],
+              ['identity-ai/profile_consistency.py',pythonRef,'identity-ai/profile_consistency.py'],
+              ['identity-ai/face_boxes.py',pythonRef,'identity-ai/face_boxes.py'],
+              ['identity-ai/requirements.txt',pythonRef,'identity-ai/requirements.txt']
+            ];
+            for(const [filename,ref,where] of files){
+              const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
+              assert.ok(!Array.isArray(data)&&data.encoding==='base64');
+              const dest=path.join(process.env.GITHUB_WORKSPACE,'.qa-handshake',where);
+              fs.mkdirSync(path.dirname(dest),{recursive:true});
+              fs.writeFileSync(dest,Buffer.from(data.content,'base64'));
+              core.info('Read-only pinned '+filename);
+            }
+            const source=fs.readFileSync('.qa-handshake/identityAiReadiness.js','utf8');
+            assert.match(source,/async function probeIdentityAiReadiness\(/);
+            assert.match(source,/api\/internal\/auth-check/);
+            const python=fs.readFileSync('.qa-handshake/identity-ai/main.py','utf8');
+            assert.match(python,/assert_original_ai_staging_isolated\(\)/);
+            core.info('PASS: pinned original Node readiness and Python staging code, no checked out repository');
+      - name: Install real original AI Python OCR/MediaPipe dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends tesseract-ocr libgl1 libglib2.0-0 libgomp1
+          python -m pip install --disable-pip-version-check -r .qa-handshake/identity-ai/requirements.txt
+          python -m py_compile .qa-handshake/identity-ai/main.py .qa-handshake/identity-ai/staging_original_ai_isolation.py
+          node --check .qa-handshake/test-handshake.js
+      - name: Run REAL staged Python with fake isolation key and Node private GET handshake
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          for key in ('FIREBASE_SERVICE_ACCOUNT_JSON','GOOGLE_APPLICATION_CREDENTIALS',
+              'CLOUDINARY_API_KEY','CLOUDINARY_API_SECRET','CLOUDINARY_URL'):
+              assert not os.environ.get(key), 'Runner must not expose private provider credentials'
+          print('PASS: zero hosted provider credentials available to local test')
+          PY
+          export RENDER_SERVICE_NAME=volunserve-identity-ai-staging
+          export VOLUNSERVE_DEPLOYMENT_ENV=staging
+          export VOLUNSERVE_STAGING_STRICT=true
+          export VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID=demo-safe-staging-project
+          export VOLUNSERVE_STAGING_BACKEND_URL=https://volunserve-backend-staging.onrender.com
+          export GOOGLE_CLOUD_PROJECT=demo-safe-staging-project
+          export ALLOWED_ORIGINS=http://127.0.0.1:19006
+          export IDENTITY_AI_INTERNAL_KEY=local-synthetic-original-ai-private-key-staging-20261125
+          export VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256="$(
+            python -c 'import hashlib;print(hashlib.sha256(b"local-synthetic-original-ai-private-key-staging-20261125").hexdigest())'
+          )"
+          export VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256="$(
+            python -c 'import hashlib;print(hashlib.sha256(b"local-synthetic-original-ai-private-key-production-20261125").hexdigest())'
+          )"
+          (
+            cd .qa-handshake/identity-ai
+            python -m uvicorn main:app --host 127.0.0.1 --port 18766 --no-access-log > ../python-local.log 2>&1
+          ) &
+          PY_PID=$!
+          trap 'kill "$PY_PID" 2>/dev/null || true; pkill -f "^python -m uvicorn main:app --host 127.0.0.1 --port 18766" || true' EXIT
+          python - <<'PY'
+          import time,json,urllib.request
+          url='http://127.0.0.1:18766/health'
+          for n in range(110):
+              try:
+                  with urllib.request.urlopen(url,timeout=8) as r:
+                      body=json.loads(r.read(4000))
+                  if r.status==200 and all(body.get(k) is True for k in
+                      ('ok','internalAuthConfigured','verificationEngineReady',
+                       'documentOcrReady','profileComparisonReady','documentPrecheckReady')):
+                      print('PASS: actual Python staging guarded FaceMesh/OCR and profile comparison ready on loopback')
+                      break
+              except Exception:
+                  pass
+              time.sleep(.75)
+          else:
+              raise SystemExit('FAIL: local original Python staging process not fully ready')
+          PY
+          node .qa-handshake/test-handshake.js
+      - name: No-deployment proof
+        run: |
+          echo "PASS NO DEPLOY: local Node→Python authenticated GET only, no Firebase, Cloudinary, production or hosted staging request"
+# A successful simulated staging-secret handshake is NOT proof that actual
+# Render staging services share independently provisioned credentials.
