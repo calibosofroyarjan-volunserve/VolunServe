@@ -125,7 +125,7 @@ test("Native Resident sees only an active, case-specific private Volunteer GPS p
   assert.match(nativeMap,/gps\.assignmentId === trackedVolunteerAssignmentId/);
   assert.match(nativeMap,/gps\.caseId === focusedCaseId/);
   assert.match(nativeMap,/\["responding", "on_site"\]\.includes\(String\(assignment\.status\)\)/);
-  assert.match(nativeMap,/trackedVolunteerCase\?\.reportedBy === CURRENT_USER_ID/);
+  assert.match(nativeMap,/focusedIncident\?\.reportedBy === CURRENT_USER_ID/);
   assert.match(nativeMap,/gpsClock - lastUpdate > 120_000/);
   assert.match(nativeMap,/validCityRoute\(\[/);
   assert.match(nativeMap,/Assigned Volunteer · live GPS/);
