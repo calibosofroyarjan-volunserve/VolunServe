@@ -6,6 +6,7 @@ on:
       - backend/server.js
       - backend/identityFaceOnlyReviewEvidence.js
       - backend/tests/identityFaceOnlyReviewEvidence.test.js
+      - backend/tests/identityFaceOnlyRouteSyntheticIntegration.test.js
       - backend/test-identity-three-attempt-review.js
       - .github/workflows/qa-face-only-private-evidence-approval-20261125.yml
   workflow_dispatch:
@@ -22,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify baseline is deployed Node and strict five-file scope
+      - name: Verify baseline is deployed Node and strict six-file scope
         run: |
           node <<'JS'
           const assert=require('node:assert/strict');
@@ -36,7 +37,8 @@ jobs:
             'backend/identityFaceOnlyReviewEvidence.js',
             'backend/server.js',
             'backend/test-identity-three-attempt-review.js',
-            'backend/tests/identityFaceOnlyReviewEvidence.test.js'
+            'backend/tests/identityFaceOnlyReviewEvidence.test.js',
+            'backend/tests/identityFaceOnlyRouteSyntheticIntegration.test.js'
           ].sort(),'No unrelated backend, rules, Cloudinary, events, donations, emergency, or frontend changes');
           console.log('PASS: exact deployed Node baseline and only guarded backend source and regression test files');
           JS
@@ -45,9 +47,11 @@ jobs:
           node --check backend/server.js
           node --check backend/identityFaceOnlyReviewEvidence.js
           node --check backend/tests/identityFaceOnlyReviewEvidence.test.js
+          node --check backend/tests/identityFaceOnlyRouteSyntheticIntegration.test.js
       - name: Execute positive, expired, missing, mismatched, public and cross-user synthetic checks
         run: |
           node --test backend/tests/identityFaceOnlyReviewEvidence.test.js
+          node --test backend/tests/identityFaceOnlyRouteSyntheticIntegration.test.js
           echo "PASS: synthetic metadata checks only, no production credentials, no real faces, no uploads or Admin decisions"
       - name: Run existing synthetic identity evidence and manual approval regressions
         run: |
