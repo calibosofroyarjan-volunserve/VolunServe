@@ -26,7 +26,7 @@ function issuer(opts={}) {
     uid,verificationId,
     proofKind:"trusted_independent_issuer",
     signatureVerified:true,documentGenuine:true,
-    serverValidated:true,
+    serverValidated:true,trustedProofReplayKey:"a".repeat(64),
     ...opts,
   });
 }
@@ -35,7 +35,7 @@ function pad(opts={}) {
     uid,verificationId,
     proofKind:"validated_presentation_attack_detection",
     signatureVerified:true,livePersonConfirmed:true,
-    serverValidated:true,
+    serverValidated:true,trustedProofReplayKey:"b".repeat(64),
     ...opts,
   });
 }
@@ -58,6 +58,23 @@ test("same-attempt validated independent proofs can become eligible",async()=>{
  });
  assert.equal(out.eligible,true);
  assert.equal(out.decision,"auto_verified");
+});
+test("independent provider attestations without one-time replay digests do not qualify",async()=>{
+  const out=await assessAutomaticIdentityApproval({
+    ...fixture(),
+    issuerValidator:issuer({trustedProofReplayKey:undefined}),
+    padValidator:pad(),
+  });
+  assert.equal(out.eligible,false);
+  assert.equal(out.reason,"trusted_proof_replay_receipts_missing");
+});
+test("duplicate proof receipt values fail closed, even with matching user and face",async()=>{
+  const out=await assessAutomaticIdentityApproval({
+    ...fixture(),
+    issuerValidator:issuer(),padValidator:pad({trustedProofReplayKey:"a".repeat(64)}),
+  });
+  assert.equal(out.eligible,false);
+  assert.equal(out.reason,"trusted_proof_replay_receipts_missing");
 });
 test("stale issuer proof cannot be used for another account/verification",async()=>{
  for(const patch of [{uid:"other-user"},{verificationId:"old-attempt"}]){
