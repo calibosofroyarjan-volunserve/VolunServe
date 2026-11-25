@@ -28,6 +28,7 @@ jobs:
               '.github/workflows/qa-original-face-only-node-20261125.yml',
               'backend/server.js',
               'backend/identityPrivateEvidence.js',
+              'backend/identityAiReadiness.js',
               'backend/test-original-face-only-qa-20261125.cjs'
             ].sort(),'No unrelated code, production settings or Firebase rules changes');
             core.info('PASS: exactly four guarded QA files changed; production unchanged');
@@ -35,6 +36,7 @@ jobs:
         run: |
           node --check backend/server.js
           node --check backend/identityPrivateEvidence.js
+          node --check backend/identityAiReadiness.js
           node --check backend/test-original-face-only-qa-20261125.cjs
           node --test backend/test-original-face-only-qa-20261125.cjs
       - name: Confirm release flag defaults OFF and no deployment
