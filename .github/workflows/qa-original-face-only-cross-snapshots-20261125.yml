@@ -1,0 +1,127 @@
+name: Real Deployed-Source Original Face-Only Cross-Service QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-face-only-cross-snapshots-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify three independent exact deployed baselines (NO MERGE)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='c20b9c0e93c96f511c659ae4cdad1125a24a0afc';
+            const nodeBase='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const pythonBase='319152e6a1cad5e54653c20e87bd1551a82b219e';
+            const hostingBase='5af28d279618dacd5eab518e5e0d52259eae8844';
+            const nodeHead='2e3af19a9c2c539a60cc2e3079dd57e85c7108aa';
+            const pythonHead='e9f92fedeab95eca769ebf379992c90b3dfd00e0';
+            const webHead='50b384900b8235b7fd3d6220a85ca2c682d37a49';
+            const check=async(base,head,allowed,label)=>{
+              const r=await github.rest.repos.compareCommits({owner,repo,base,head});
+              assert.equal(r.data.behind_by,0,label+' is behind deployed source');
+              assert.deepEqual((r.data.files||[]).map(x=>x.filename).sort(),allowed.sort(),
+                label+' changes an unrelated module');
+              core.info('PASS: '+label+' only original-identity files changed, no unrelated live modules');
+            };
+            await Promise.all([
+              check(base,context.sha,[
+                '.github/workflows/qa-original-face-only-cross-snapshots-20261125.yml',
+                'scripts/qa-original-face-only-cross-snapshots-20261125.cjs',
+              ],'Orchestrator'),
+              check(nodeBase,nodeHead,[
+                '.github/workflows/qa-original-face-only-node-20261125.yml',
+                'backend/server.js',
+                'backend/identityAiReadiness.js',
+                'backend/identityPrivateEvidence.js',
+                'backend/test-original-face-only-qa-20261125.cjs'
+              ],'Node release candidate'),
+              check(pythonBase,pythonHead,[
+                '.github/workflows/qa-original-face-only-python-20261125.yml',
+                'identity-ai/main.py',
+                'scripts/test-original-face-only-python-20261125.py'
+              ],'Python release candidate'),
+              check(hostingBase,webHead,[
+                '.github/workflows/qa-original-face-only-web-20261125.yml',
+                'app/(admin)/identity-reviews.tsx',
+                'app/identity-verification.web.tsx',
+                'lib/identityVerification.ts',
+              ],'Hosting release candidate'),
+            ]);
+            const read=async(path,ref)=>{
+              const r=await github.rest.repos.getContent({owner,repo,path,ref});
+              assert.equal(r.data.encoding,'base64');
+              return Buffer.from(r.data.content,'base64').toString('utf8');
+            };
+            const [original,updated,originalWeb,updatedWeb]=await Promise.all([
+              read('identity-ai/main.py','c1eae1817aa8'),
+              read('identity-ai/main.py',pythonHead),
+              read('app/identity-verification.web.tsx',hostingBase),
+              read('app/identity-verification.web.tsx',webHead)
+            ]);
+            const face=s=>{
+              const start=s.indexOf('def run_face_verification(');
+              assert.ok(start>=0);
+              const next=s.slice(start+1).search(/^(?:@app\.|@lru_cache|def |async def |class )/m);
+              return next<0?s.slice(start).trimEnd():s.slice(start,start+1+next).trimEnd();
+            };
+            assert.equal(face(original),face(updated),'Historical 2026-10-23 1:1 matcher changed');
+            const style=s=>s.slice(s.lastIndexOf('const styles = StyleSheet.create('));
+            assert.equal(style(originalWeb),style(updatedWeb),'Screenshot layout changed');
+            core.info('PASS: actual October 23 original face matcher and published identity screenshot design unchanged');
+            core.info('NO DEPLOY: release candidates remain separate; no whole-repo merge');
+  combined-contract:
+    needs: source-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout read-only QA orchestrator
+        uses: actions/checkout@v4
+      - name: Checkout deployed-derived Node candidate into isolated directory
+        uses: actions/checkout@v4
+        with:
+          ref: 2e3af19a9c2c539a60cc2e3079dd57e85c7108aa
+          path: qa_sources/node
+      - name: Checkout deployed-derived Python candidate into isolated directory
+        uses: actions/checkout@v4
+        with:
+          ref: e9f92fedeab95eca769ebf379992c90b3dfd00e0
+          path: qa_sources/python
+      - name: Checkout published-Hosting-derived Web candidate into isolated directory
+        uses: actions/checkout@v4
+        with:
+          ref: 50b384900b8235b7fd3d6220a85ca2c682d37a49
+          path: qa_sources/web
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify syntaxes, private evidence, safe Admin review and original Python output
+        run: |
+          node --check qa_sources/node/backend/server.js
+          node --check scripts/qa-original-face-only-cross-snapshots-20261125.cjs
+          python -m py_compile qa_sources/python/identity-ai/main.py
+          (cd qa_sources/python && python scripts/test-original-face-only-python-20261125.py)
+          (cd qa_sources/node && node --test backend/test-original-face-only-qa-20261125.cjs)
+      - name: Execute local synthetic Node to Python JSON/HTTP contract
+        run: |
+          (cd qa_sources/node && node --test ../../scripts/qa-original-face-only-cross-snapshots-20261125.cjs)
+      - name: Verify real published Hosting dependencies and identity/Admin TypeScript
+        run: |
+          cd qa_sources/web
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Report safe testing limit
+        run: |
+          echo 'SUCCESS means multi-snapshot synthetic source contract and TypeScript passed'
+          echo 'NOT YET TESTED real hosted ID upload, Cloudinary, Firebase or true Node-Python secret'
+          echo 'NO DEPLOY, NO ID PHOTOS, NO RESIDENT DATA, NO SECRETS, NO PAYMENTS'
