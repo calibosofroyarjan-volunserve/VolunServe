@@ -1,0 +1,52 @@
+name: QA Firebase Function Emergency Manual-Only (NO DEPLOY)
+on:
+  pull_request:
+    branches: [backend-live-protected]
+    paths: [functions/emergencySimpleAutoInvite.js, functions/test-emergency-production-manual-only.cjs, .github/workflows/qa-firebase-emergency-production-manual-only-20261125.yml]
+permissions:
+  contents: read
+jobs:
+  synthetic-cloud-function-manual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Fetch exact PR HEAD without submodules or production credentials
+        env:
+          REVIEW_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init -q .
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -c protocol.version=2 fetch --no-tags --depth=2 origin "$REVIEW_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$REVIEW_SHA"
+      - name: Require exact backend source base and only three safe changed paths
+        run: |
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const cp=require("node:child_process");
+          const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          const base="c4d133c6aa7ab1a8a60810ade8e460302a61818f";
+          assert.equal(git("rev-list","--parents","-n","1","HEAD").split(" ")[1],base,
+            "BLOCKED: candidate must directly descend from exact reviewed backend source");
+          const changed=git("diff","--name-only","--no-renames",base,"HEAD").split("\n").filter(Boolean).sort();
+          assert.deepEqual(changed,[
+            ".github/workflows/qa-firebase-emergency-production-manual-only-20261125.yml",
+            "functions/emergencySimpleAutoInvite.js",
+            "functions/test-emergency-production-manual-only.cjs"
+          ].sort(),"BLOCKED: unknown config, backend, Hosting, Firebase Rules or AI source changes");
+          console.log("PASS only reviewed Firebase Function emergency module and synthetic QA");
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and existing automatic invitation demo regression
+        run: |
+          node --check functions/emergencySimpleAutoInvite.js
+          node --check functions/test-emergency-production-manual-only.cjs
+          node --test functions/test-emergencySimpleAutoInvite.cjs
+      - name: Production hard-stop and legacy Volunteer reply offline verification
+        run: node --test functions/test-emergency-production-manual-only.cjs
+      - name: No production deploy
+        run: echo "Synthetic Firebase Function tests only. No production credentials, deployment, rules or documents."

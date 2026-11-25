@@ -38,6 +38,13 @@ function volunteerAllowed(c,uid,app,user,busy=[]){
 function makeApprovedCaseAutoInviteHandler({db,FieldValue,env=process.env,clock=()=>Date.now()}={}){
   if(!db||!FieldValue?.serverTimestamp)throw Error("Firestore dependencies required");
   return async event=>{
+    // Production is MANUAL Admin-assignment-only during Emergency Response QA.
+    // Enforce independently of legacy production enable flags and before ANY
+    // Firestore reads/notifications/writes. Keep the separate decision handler
+    // unchanged for invitations that already existed before this policy.
+    const project=String(env.GCLOUD_PROJECT||env.GOOGLE_CLOUD_PROJECT||"");
+    if(project==="volunserve-3aa5b")
+      return result("disabled","production_manual_assignment_only");
     if(!dispatchEnabled(env))return result("disabled","explicit_feature_gate_off");
     const caseId=String(event?.params?.caseId||"");
     const before=event?.data?.before?.data?.();
