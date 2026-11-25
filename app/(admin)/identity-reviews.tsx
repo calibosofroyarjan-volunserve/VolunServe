@@ -812,9 +812,18 @@ function ReviewDetail({
   const cannotApprove = blurry ||
     (faceOnlyReview ? (!eligibleFaceOnly || !faceOnlyEvidenceReady) : !recognized) ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
-  const faceScore = typeof item.matchScore === "number" &&
-    Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
-    ? (item.matchScore * 100).toFixed(1) + "%" : "Not evaluated";
+  // The model's numeric similarity is a technical signal, not a grade or
+  // official proof of identity. Show the outcome rather than a percentage.
+  const comparisonPerformed = item.verificationMethod !== "volunserve_ai_ocr_manual_review" &&
+    (item.faceComparisonPassed === true || item.faceComparisonPassed === false);
+  const faceMatchLabel = item.faceComparisonPassed === true
+    ? "Face Match"
+    : comparisonPerformed ? "Match Not Confirmed" : "Not Evaluated";
+  const faceMatchDescription = item.faceComparisonPassed === true
+    ? "Preliminary face comparison passed. Independent Admin ID validation is still required."
+    : comparisonPerformed
+      ? "The face comparison did not confirm a match. A clearer rescan or review is required."
+      : "Face matching has not been completed.";
   const declaredIdLabel = item.documentScreening?.declaredIdType === "national_id"
     ? "Philippine National ID" :
     String(item.documentScreening?.declaredIdType || "Unspecified").replace(/_/g, " ");
@@ -842,12 +851,11 @@ function ReviewDetail({
     },
     {
       name:"Face matching",
-      value:faceOnlyReview && item.faceComparisonPassed !== true
-        ? "Unsuccessful or uncertain comparison — request retry" :
-        faceScore === "Not evaluated" ? "Not yet evaluated" :
-        faceScore + " preliminary similarity",
+      value:item.faceComparisonPassed === true
+        ? "Face match detected — independent Admin review required"
+        : comparisonPerformed ? "Face match not confirmed — request retry" : "Not yet evaluated",
       ok:false,
-      warning:false,
+      warning:item.faceComparisonPassed === false,
     },
   ];
   const openIssuerCheck = () => void Linking.openURL("https://everify.gov.ph/check");
@@ -879,9 +887,13 @@ function ReviewDetail({
             <Ionicons name="hardware-chip-outline" size={21} color="#08765A" />
             <Text style={styles.premiumCardTitle}>AI Verification Result</Text>
           </View>
-          <View style={styles.premiumFaceResult}>
-            <Text style={styles.premiumFaceValue}>{faceScore}</Text>
-            <Text style={styles.premiumSubCopy}>Preliminary face similarity; not identity proof.</Text>
+          <View style={[styles.premiumFaceResult,
+            item.faceComparisonPassed !== true && styles.premiumFaceResultWarning]}>
+            <Text style={[styles.premiumFaceValue,
+              item.faceComparisonPassed !== true && styles.premiumFaceValueWarning]}>
+              {faceMatchLabel}
+            </Text>
+            <Text style={styles.premiumSubCopy}>{faceMatchDescription}</Text>
           </View>
           <View style={styles.premiumResultRow}>
             <Text style={styles.premiumResultLabel}>ID Quality</Text>
@@ -2081,7 +2093,9 @@ const styles = StyleSheet.create({
   premiumCardTitle: { color: "#102B26", fontSize: 15, lineHeight: 21, fontWeight: "800" },
   premiumSubCopy: { color: "#60756B", fontSize: 12, lineHeight: 18, marginTop: 2 },
   premiumFaceResult: { backgroundColor: "#E8F9F0", borderRadius: 10, padding: 12, marginBottom: 10 },
+  premiumFaceResultWarning: { backgroundColor: "#FFF7ED" },
   premiumFaceValue: { color: "#08765A", fontWeight: "800", fontSize: 20, lineHeight: 27 },
+  premiumFaceValueWarning: { color: "#9A3412" },
   premiumResultRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
     borderBottomColor: "#EDF2EF", borderBottomWidth: 1, paddingVertical: 8, gap: 9,
