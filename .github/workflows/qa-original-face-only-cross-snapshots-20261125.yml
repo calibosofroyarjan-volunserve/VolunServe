@@ -21,9 +21,9 @@ jobs:
             const nodeBase='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
             const pythonBase='319152e6a1cad5e54653c20e87bd1551a82b219e';
             const hostingBase='5af28d279618dacd5eab518e5e0d52259eae8844';
-            const nodeHead='2e3af19a9c2c539a60cc2e3079dd57e85c7108aa';
-            const pythonHead='e9f92fedeab95eca769ebf379992c90b3dfd00e0';
-            const webHead='50b384900b8235b7fd3d6220a85ca2c682d37a49';
+            const nodeHead='9ac3f9401c13a2807fd055de49ec26c71f13635f';
+            const pythonHead='d3320ccef20bd87b98cecc8885da5ab7fa57809e';
+            const webHead='3063dacba2f27cd41a70b7e320d3fe30e988396a';
             const check=async(base,head,allowed,label)=>{
               const r=await github.rest.repos.compareCommits({owner,repo,base,head});
               assert.equal(r.data.behind_by,0,label+' is behind deployed source');
@@ -88,17 +88,17 @@ jobs:
       - name: Checkout deployed-derived Node candidate into isolated directory
         uses: actions/checkout@v4
         with:
-          ref: 2e3af19a9c2c539a60cc2e3079dd57e85c7108aa
+          ref: 9ac3f9401c13a2807fd055de49ec26c71f13635f
           path: qa_sources/node
       - name: Checkout deployed-derived Python candidate into isolated directory
         uses: actions/checkout@v4
         with:
-          ref: e9f92fedeab95eca769ebf379992c90b3dfd00e0
+          ref: d3320ccef20bd87b98cecc8885da5ab7fa57809e
           path: qa_sources/python
       - name: Checkout published-Hosting-derived Web candidate into isolated directory
         uses: actions/checkout@v4
         with:
-          ref: 50b384900b8235b7fd3d6220a85ca2c682d37a49
+          ref: 3063dacba2f27cd41a70b7e320d3fe30e988396a
           path: qa_sources/web
       - uses: actions/setup-node@v4
         with:
