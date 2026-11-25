@@ -1,0 +1,82 @@
+name: Identity Pending Buttons UI Regression (NO DEPLOY)
+on:
+  push:
+    branches: [qa/fix-identity-pending-actions-20261125]
+    paths:
+      - app/identity-verification.web.tsx
+      - .github/workflows/qa-identity-pending-buttons-no-deploy-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-deploy-identity-button-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Fail closed if unrelated live code is modified
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='e8bb5308b1e0bbd477d0c6721aee83a66ebd2dde';
+          const sha=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,sha]);
+          cp.execFileSync('git',['diff','--check',base,sha]);
+          const changed=cp.execFileSync('git',['diff','--name-only',base,sha],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-identity-pending-buttons-no-deploy-20261125.yml',
+            'app/identity-verification.web.tsx'
+          ].sort(),'Changes must stay in read-only QA workflow and identity status UI only');
+          console.log('PASS: original published Hosting source remains baseline, all other modules unchanged');
+          JS
+      - name: Assert status UX and original identity security behavior
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const ui=fs.readFileSync('app/identity-verification.web.tsx','utf8');
+          const api=fs.readFileSync('lib/identityVerification.ts','utf8');
+          const checks=[
+            ['pending refresh is authenticated server GET',ui.includes('getIdentityVerificationStatus()') && api.includes('/api/identity/status') && api.includes('Bearer')],
+            ['pending refresh has distinct progress',ui.includes('Checking the latest status...')],
+            ['pending refresh has explicit unchanged outcome',ui.includes('still waiting for Admin review.')],
+            ['pending refresh displays network failures',ui.includes('Unable to refresh status:')],
+            ['pending refresh does not rewrite stored status on GET failure',ui.includes('Show a refresh failure separately')],
+            ['pending refresh feedback is visible',ui.includes('accessibilityLiveRegion="polite"') && ui.includes('{feedback}')],
+            ['pending status still displays server message',ui.includes('statusResult?.message ||')],
+            ['original face-only result recognized only from persisted message',ui.includes('statusResult?.message?.startsWith("Original face-only comparison completed.")')],
+            ['inconclusive OCR panel hidden for original face-only pending result',ui.includes('documentScreening={originalFaceOnlyPending ? undefined : statusResult?.documentScreening}')],
+            ['face-only disclaimer remains honest',ui.includes('Face-only mode did not perform OCR or authenticate the National ID.')],
+            ['profile navigation is deterministic',ui.includes('router.replace("/(tabs)/profile")') && !ui.includes('router.back()')],
+            ['face-only processing does not grant verified',api.includes('verify-face-only') && ui.includes('EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true"')],
+            ['existing consent and private media retained',api.includes('identityEvidenceConsent') && ui.includes('documentConsent')]
+          ];
+          checks.forEach(([label,valid])=>{
+            assert.equal(valid,true,'UI regression: '+label);
+            console.log('PASS:',label);
+          });
+          console.log('NO DEPLOY: synthetic source assertions, no real ID images, Firebase writes or account changes');
+          JS
+      - name: Install lockfile and type-check unchanged Expo app
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Build web with original face-only feature flag (no publication)
+        run: |
+          npx expo export --platform web --output-dir dist
+          test -f dist/index.html
+          echo "PASS: static Expo web export compiled; no Hosting or Render deployment"
+# No Firebase SDK writes, private ID data, Cloudinary media upload, or production release.
