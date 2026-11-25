@@ -11,13 +11,14 @@ export type VolunteerEligibilityRow = {
 };
 
 export function VolunteerEligibilityValidation({
-  rows, loaded, failed, caseBarangay, isValidated,
+  rows, loaded, failed, caseBarangay, isValidated, manualOnly=false,
 }: {
   rows: VolunteerEligibilityRow[];
   loaded: boolean;
   failed?: boolean;
   caseBarangay: string;
   isValidated: boolean;
+  manualOnly?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(1);
@@ -30,8 +31,8 @@ export function VolunteerEligibilityValidation({
   }), [rows]);
   const ordered = useMemo(() => [...rows].sort((a, b) =>
     Number(b.eligible) - Number(a.eligible) ||
-    Number(b.inCaseBarangay) - Number(a.inCaseBarangay) ||
-    a.name.localeCompare(b.name)), [rows]);
+    (manualOnly ? 0 : Number(b.inCaseBarangay) - Number(a.inCaseBarangay)) ||
+    a.name.localeCompare(b.name)), [rows, manualOnly]);
   const totalPages = Math.max(1, Math.ceil(ordered.length / 5));
   const currentPage = Math.min(page, totalPages);
   const visible = ordered.slice((currentPage - 1) * 5, currentPage * 5);
@@ -51,23 +52,23 @@ export function VolunteerEligibilityValidation({
       failed ? <Text style={s.error}>Volunteer directory could not be loaded. Eligibility counts are unavailable; check Admin permissions and connection.</Text> :
       <View style={s.summary}>
         <Text style={s.summaryText}>Approved directory: <Text style={s.count}>{summary.total}</Text></Text>
-        <Text style={s.summaryText}>Same barangay: <Text style={s.count}>{summary.local}</Text></Text>
+        {!manualOnly && <Text style={s.summaryText}>Same barangay: <Text style={s.count}>{summary.local}</Text></Text>}
         <Text style={s.summaryText}>Eligible for this case: <Text style={s.count}>{summary.eligible}</Text></Text>
-        <Text style={s.summaryText}>Other barangays: <Text style={s.count}>{summary.other}</Text></Text>
+        {!manualOnly && <Text style={s.summaryText}>Other barangays: <Text style={s.count}>{summary.other}</Text></Text>}
       </View>}
     <Text style={s.hint}>{isValidated
-      ? "Validated case. Offers can be sent only to qualified, approved Volunteers under the active dispatch rules."
+      ? manualOnly ? "Validated case. Admin can manually offer tasks to approved qualified Volunteers anywhere in SJDM." : "Validated case. Offers can be sent only to qualified, approved Volunteers under the active dispatch rules."
       : "Report is not validated. Volunteer eligibility can be reviewed, but sending offers is locked."}</Text>
     {expanded && loaded && !failed && (
       <View style={s.list}>
-        <Text style={s.section}>Eligibility results · incident barangay: {caseBarangay || "Not confirmed"}</Text>
+        <Text style={s.section}>{manualOnly ? "Manual assignment · citywide eligible Volunteers" : `Eligibility results · incident barangay: ${caseBarangay || "Not confirmed"}`}</Text>
         {ordered.length === 0
           ? <Text style={s.secondary}>There are no approved Volunteer applications available in the Admin directory. This does not prove that no users have registered.</Text>
           : visible.map((v) => (
             <View key={v.id} style={s.item}>
               <View style={s.grow}>
                 <Text style={s.name}>{v.name}</Text>
-                <Text style={s.secondary}>{v.barangay || "Barangay not provided"}</Text>
+                {!manualOnly && <Text style={s.secondary}>{v.barangay || "Barangay not provided"}</Text>}
                 <Text style={s.reason}>{v.reason}</Text>
               </View>
               <View style={[s.pill, v.eligible ? s.good : s.neutral]}>
