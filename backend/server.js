@@ -5572,7 +5572,9 @@ app.post(
           : reviewTrack;
         const resultMessage = faceOnly
           ? !faceComparisonPassed
-            ? "The original face comparison was unsuccessful or inconclusive. Request a clearer retry; no automatic identity verification occurred."
+            ? (result.requiresManualReview
+                ? "Three original face comparisons were unsuccessful or inconclusive. Admin may review the case or authorize a new attempt, but cannot approve without a successful comparison and independent ID validation."
+                : "The original face comparison was unsuccessful or inconclusive. You may retry with clearer photos; no automatic identity verification occurred.")
           : decision === "failed"
             ? "The government ID portrait and selfie did not match clearly. Retake or ask Admin for review. No OCR or document authenticity check was performed."
             : "Original face-only comparison completed. No OCR, government ID issuance check or validated liveness was performed. Independent Admin review is required."
