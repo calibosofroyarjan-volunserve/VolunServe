@@ -148,13 +148,17 @@ async function simulate({
     status(v){this.code=v;return this;},
     json(v){this.body=v;return this;}
   };
-  let cursor=0;
-  const next=async()=>{
-    if(cursor>=route.length)return;
-    const fn=route[cursor++];
-    await fn(request,response,next);
-  };
-  await next();
+  // Execute synthetic auth gates synchronously, then AWAIT the real async
+  // decision handler. Express's next() is not an awaited promise; treating it
+  // as one can falsely mark failed approval scenarios as HTTP 200.
+  for(const middleware of route.slice(0,2)){
+    let permitted=false;
+    await middleware(request,response,()=>{permitted=true;});
+    if(!permitted)
+      return {code:response.code,body:response.body,state,writes:record.writes};
+  }
+  await route[2](request,response);
+  assert(response.body!==null,"Actual Admin decision handler did not finish");
   return {code:response.code,body:response.body,state,writes:record.writes};
 }
 test("synthetic authenticated Admin + current private National ID/selfie can approve only after issuer attestation",async()=>{
