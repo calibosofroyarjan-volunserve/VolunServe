@@ -1,0 +1,53 @@
+name: VolunServe Original AI Live Release Marker Check (GET ONLY)
+on:
+  push:
+    branches: [qa/original-ai-current-live-revision-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-get-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify only GET-only workflow differs from known Hosting source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const r=await github.rest.repos.compareCommits({
+              owner,repo,base:'5af28d279618dacd5eab518e5e0d52259eae8844',head:context.sha});
+            assert.equal(r.data.behind_by,0);
+            assert.deepEqual((r.data.files||[]).map(x=>x.filename),[
+              '.github/workflows/qa-original-ai-live-hosting-release-marker-20261125.yml']);
+            core.info('PASS: only read-only hosting marker QA; no production mutations');
+      - name: Check actual public Hosting release and existing routes
+        run: node scripts/check-live-hosting.cjs
+      - name: Verify only public Cloudinary and identity health flags, no client secrets
+        run: |
+          node - <<'JS'
+          const checks=[
+            ["node","https://volunserve.onrender.com/health"],
+            ["python","https://volunserve-identity-ai.onrender.com/health"]
+          ];
+          (async()=>{
+            for(const [name,url] of checks){
+              const r=await fetch(url,{signal:AbortSignal.timeout(45000),redirect:"error"});
+              if(!r.ok)throw Error(name+" health HTTP "+r.status);
+              const d=await r.json();
+              const safe=name==="node"
+                ? {ok:d.ok,identityEngine:d.identityEngine,assistanceEvidenceStorage:d.assistanceEvidenceStorage}
+                : {ok:d.ok,verificationEngineReady:d.verificationEngineReady,internalAuthConfigured:d.internalAuthConfigured,livenessImplemented:d.livenessImplemented,idDocumentAuthenticityVerified:d.idDocumentAuthenticityVerified};
+              console.log("PUBLIC_LIVE_HEALTH",name,JSON.stringify(safe));
+              if(safe.ok!==true)throw Error("Unhealthy "+name);
+            }
+          })().catch(e=>{console.error("Health read failed: "+e.message);process.exitCode=1});
+          JS
+      - name: No deploy boundary
+        run: |
+          echo 'GET ONLY. No cloud mutations, no real images, no credentials, no hosting or Render deploy'
