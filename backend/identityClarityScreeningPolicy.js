@@ -29,11 +29,11 @@ function assessIdentityClarityScreening({screening,rawDecision,faceOnly=false}={
   if(screening.imageQualityStatus!=="adequate") {
     return decision("manual_review","quality_unconfirmed");
   }
-  if(!selectedIdRecognized(screening)) {
-    return decision("manual_review","id_unrecognized_or_inconsistent");
-  }
   if(warnings.length) {
     return decision("manual_review","document_warnings");
+  }
+  if(!selectedIdRecognized(screening)) {
+    return decision("manual_review","id_unrecognized_or_inconsistent");
   }
   if(screening.profileNameCheck!=="possible_match" ||
      screening.profileBirthDateCheck!=="possible_match") {
