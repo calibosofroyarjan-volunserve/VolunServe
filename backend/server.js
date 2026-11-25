@@ -27,6 +27,7 @@ const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
 const { validateFaceOnlyReviewEvidence } = require("./identityFaceOnlyReviewEvidence");
 const { classifyHybridDocumentPrecheck } = require("./identityHybridPrecheckDecision");
 const { assessAutomaticIdentityApproval } = require("./identityAutoApprovalGateway");
+const { assessIdentityClarityScreening } = require("./identityClarityScreeningPolicy");
 const { resolveTrustedAutomaticCompletion } = require("./identityTrustedAutomaticCompletion");
 const {
   parseConsentedIdentityEvidence,
@@ -763,6 +764,17 @@ function normalizeIdDocumentScreening(value) {
     authenticityVerified: false, // Keyword OCR is NOT an issuance registry.
     livenessVerified: false, // Still image is NOT a liveness proof.
     manualReviewRequired: true,
+    // QA clarity/face screening label only. It NEVER grants Resident access.
+    clarityScreeningStatus: ["auto_passed", "manual_review", "rescan_required"]
+      .includes(value?.clarityScreeningStatus)
+      ? value.clarityScreeningStatus : "not_assessed",
+    clarityScreeningReason: [
+      "clear_id_and_face_match", "blurry_id", "quality_unconfirmed",
+      "unsupported_document", "id_unrecognized_or_inconsistent",
+      "document_warnings", "profile_consistency_unconfirmed",
+      "face_mismatch", "face_uncertain", "original_face_only_lacks_id_quality",
+    ].includes(value?.clarityScreeningReason)
+      ? value.clarityScreeningReason : "quality_unconfirmed",
     backSideProvided: value?.backSideProvided === true,
     backSideScreened: value?.backSideScreened === true,
     imageQualityStatus: ["low", "adequate"].includes(value?.imageQualityStatus)
@@ -5510,16 +5522,30 @@ app.post(
       // unapprovable pending Admin case after the first attempt. Treat it
       // as a failed retry until the existing 3-attempt review threshold.
       // This affects ONLY the explicitly opted-in face-only route.
-      const decision = faceOnly
+      // Automatically classify CLEAR scans vs BLURRY/UNCERTAIN scans.
+      // This is automatic AI screening, NOT automatic government-identity
+      // authentication. No change to the independent verified-access gate.
+      const clarityScreening = assessIdentityClarityScreening({
+        screening: documentScreening, rawDecision, faceOnly,
+      });
+      documentScreening.clarityScreeningStatus = clarityScreening.status;
+      documentScreening.clarityScreeningReason = clarityScreening.reason;
+      const originalDecision = faceOnly
         ? (faceComparisonPassed ? "manual_review" : "failed")
         : enforceSelectedIdDecision(
           rawDecision, documentScreening, aiResult?.livenessImplemented === true,
         );
-      const reviewTrack = faceOnly ? "face_only_admin_review" : classifyIdentityReviewTrack({
-        screening: documentScreening,
-        decision,
-        idImageQualityScore: numberOrNull(aiResult?.idImageQualityScore),
-      });
+      // Blur/low quality MUST queue a human; unsupported/school ID still
+      // fails and requests a new supported document rather than approval.
+      const decision = !faceOnly && clarityScreening.reason === "blurry_id"
+        ? "manual_review" : originalDecision;
+      const reviewTrack = faceOnly ? "face_only_admin_review"
+        : clarityScreening.reason === "blurry_id" ? "blurry_id_review"
+        : classifyIdentityReviewTrack({
+          screening: documentScreening,
+          decision,
+          idImageQualityScore: numberOrNull(aiResult?.idImageQualityScore),
+        });
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5633,6 +5659,8 @@ app.post(
             : reviewTrack;
         const resultMessage = autoCompletion.eligible
           ? "Identity automatically verified using independently validated government ID, liveness and calibrated face matching."
+          : !faceOnly && clarityScreening.status === "auto_passed"
+          ? "CLEAR SCAN + FACE MATCH: Automatic AI screening passed. Government ID authenticity and liveness have NOT been independently validated; Admin approval is still required for Verified Resident access."
           : faceOnly
           ? !faceComparisonPassed
             ? (result.requiresManualReview

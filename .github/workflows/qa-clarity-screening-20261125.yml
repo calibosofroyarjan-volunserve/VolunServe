@@ -1,0 +1,49 @@
+name: QA Clear Photo Auto-Screening vs Blurry Admin Review (NO DEPLOY)
+on:
+  push:
+    branches: [qa/identity-clear-auto-screening-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  clarity-auto-screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enforce QA-only scope and prevent accidental deploy
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs'),cp=require('node:child_process');
+          const before='a18a23984a7c908093eea7bee4c403c16cdc32fb';
+          const files=cp.execFileSync('git',['diff','--name-only',before,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          const allowed=[
+            '.github/workflows/qa-clarity-screening-20261125.yml',
+            'backend/identityClarityScreeningPolicy.js',
+            'backend/test-identityClarityScreeningPolicy.js',
+            'backend/server.js',
+            'docs/identity/CLARITY_AUTO_SCREENING_QA.md',
+          ].sort();
+          assert.deepEqual(files,allowed,'Unexpected change outside QA clarity screening');
+          cp.execFileSync('git',['diff','--check',before,'HEAD']);
+          const s=fs.readFileSync('backend/server.js','utf8');
+          assert(s.includes('identityVerified: autoCompletion.eligible'));
+          assert(s.includes('result: "not_validated"'));
+          assert(s.includes('calibrationValidated: false'));
+          console.log('QA only, no verification privilege escalation');
+          JS
+      - name: Check policy syntax, classification and identity regressions
+        run: |
+          set -eu
+          node --check backend/server.js
+          node --check backend/identityClarityScreeningPolicy.js
+          node --test backend/test-identityClarityScreeningPolicy.js
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identityAutoApprovalGateway.js
+          node --test backend/test-identity-final-admin-only.js
+      - name: Confirm no deployment
+        run: echo 'NO DEPLOYMENT; production Auth, Firebase, Cloudinary, Render untouched'
