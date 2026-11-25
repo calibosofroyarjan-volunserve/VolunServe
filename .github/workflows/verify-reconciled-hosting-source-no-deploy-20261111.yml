@@ -1464,6 +1464,76 @@ jobs:
             }
             // END PINNED EMERGENCY AUDIT-ONLY EXCEPTION
 
+            // BEGIN ONE-TIME EXACT MANUAL EMERGENCY HOSTING RELEASE CONTROLLER
+            // Frontend source is NOT copied to protected branch; the protected
+            // production runner checks out a separately reviewed immutable SHA.
+            // Every other PR keeps the ORIGINAL protected-vs-Hosting marker gate.
+            {
+              const controller=".github/workflows/release-emergency-approved-live-20261125.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changes=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean).sort();
+              if(changes.length===2 &&
+                changes.includes("A\t"+controller) &&
+                changes.includes("M\t"+verifier)){
+                assert.equal(liveBase,"57a40697563f5ba03468754349892ca18dfab617",
+                  "BLOCKED: protected branch head changed since one-time release review");
+                assert.equal(marker.revision,"4014b18329f3eb2cd366fcb21b1f93e0ab4b842e",
+                  "BLOCKED: live Hosting is not the pinned QA-reviewed source");
+                assert.equal(blob(liveBase,verifier),"58fdc55cf055dc6d39c1b89c5231b77a80192dc7",
+                  "BLOCKED: existing strict verifier changed");
+                assert.equal(blob(commit,controller),"89b294d09ef7a41aaa581bd9bb13ee5815bcbb3e",
+                  "BLOCKED: reviewed release controller altered");
+                assert.equal(git("ls-tree","--name-only",liveBase,"--",controller),"",
+                  "BLOCKED: release controller already exists in protected tree");
+                const original=git("show",liveBase+":"+verifier);
+                const candidate=git("show",commit+":"+verifier);
+                const start="            // BEGIN ONE-TIME EXACT MANUAL EMERGENCY HOSTING RELEASE CONTROLLER\n";
+                const end="            // END ONE-TIME EXACT MANUAL EMERGENCY HOSTING RELEASE CONTROLLER\n";
+                const first=candidate.indexOf(start),last=candidate.indexOf(end,first);
+                assert(first>=0 && last>first && candidate[last+end.length]==="\n",
+                  "BLOCKED: one-time release-controller exemption markers changed");
+                assert.equal(candidate.slice(0,first)+candidate.slice(last+end.length+1),
+                  original,"BLOCKED: previously protected release policy changed");
+                for(const p of [
+                  "firestore.rules","storage.rules","firebase.json",".firebaserc",
+                  "functions/index.js","backend/server.js","package.json","package-lock.json",
+                  "lib/firebase.ts","scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml",
+                  "app/(admin)/identity-reviews.tsx","app/identity-verification.web.tsx",
+                  "app/identity-verification.tsx","lib/identityVerification.ts"
+                ])assert.equal(blob(commit,p),blob(liveBase,p),
+                  "BLOCKED: production config, AI or application source changed: "+p);
+                const source=git("show",commit+":"+controller);
+                assert(source.includes("branches: [live-protected]") &&
+                  source.includes("permissions:\n  contents: read") &&
+                  source.includes("environment: production") &&
+                  source.includes("cancel-in-progress: false") &&
+                  source.includes("ref: c91010ddbe1d7af2502b84792211fd35d4bfbd61") &&
+                  source.includes("PINNED_HOSTING_SHA: 4014b18329f3eb2cd366fcb21b1f93e0ab4b842e") &&
+                  source.includes("QA_COMMIT_SHA: fbedfc3906886b2f5da2d1036f8696a1c63e0b5b") &&
+                  source.includes("GITHUB_SHA=\"$RELEASE_SHA\" node scripts/verify-hosting-release.cjs") &&
+                  source.includes("scripts/manual-emergency-hosting-rollback-20261125.cjs") &&
+                  source.includes("trap rollback_on_failure EXIT") &&
+                  source.includes("npx firebase-tools deploy --only hosting") &&
+                  !source.includes("firebase deploy --only firestore") &&
+                  !source.includes("firebase deploy --only functions") &&
+                  !source.includes("pull_request_target:"),
+                  "BLOCKED: protected release controller not an exact audited Hosting-only release");
+                const legacyAuto=git("show",liveBase+
+                  ":.github/workflows/auto-publish-protected-live-hosting.yml");
+                assert(legacyAuto.includes("paths:") &&
+                  !legacyAuto.includes("release-emergency-approved-live-20261125") &&
+                  !legacyAuto.includes("verify-reconciled-hosting-source-no-deploy-20261111"),
+                  "BLOCKED: generic Hosting auto-publish may accidentally trigger");
+                console.log("PASS: one-time two-file pinned manual Emergency release controller, strict verifier preserved");
+                console.log("No app/source branch merge; reviewed Hosting SHA and immutable rollback only");
+                return;
+              }
+            }
+            // END ONE-TIME EXACT MANUAL EMERGENCY HOSTING RELEASE CONTROLLER
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
