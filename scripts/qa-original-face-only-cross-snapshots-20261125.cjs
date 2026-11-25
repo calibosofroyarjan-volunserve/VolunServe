@@ -81,13 +81,15 @@ test("real Node gateway forwards front ID + selfie to dedicated face-only Python
     res.writeHead(200,{"Content-Type":"application/json"});
     // Actual historical matched-face decision is manual_review, not verified.
     res.end(JSON.stringify({ok:true,status:"pending",decision:"manual_review",
-      verificationId:"synthetic_case",matchScore:0.63,livenessScore:null,
+      verificationId:"synthetic_case",matchScore:0.63,matchThreshold:0.52,
+      faceComparisonPassed:true,livenessScore:null,
       livenessImplemented:false,engine:"mediapipe-landmark-1to1-v1"}));
   },async endpoint=>{
     const {gateway}=makeGateway(endpoint);
     const result=await gateway.callIdentityAiService(await mockForm(),{faceOnly:true});
     assert.equal(result.decision,"manual_review");
     assert.equal(result.status,"pending");
+    assert.equal(result.faceComparisonPassed,true);
     assert.equal(gateway.normalizeAiDecision(result.decision),"manual_review");
     const outcome=gateway.identityAttemptOutcome("manual_review",1);
     assert.equal(outcome.status,"pending");
@@ -124,6 +126,11 @@ test("historical face-only decision is never auto Verified; Admin issuer attesta
   assert.match(source,/faceOnly \? rawDecision : enforceSelectedIdDecision/);
   assert.match(source,/\["verified", "manual_review"\].includes\(verification.aiDecision\)/);
   assert.match(source,/identityVerified:\s*false/);
+  assert.match(source,/verification\.faceComparisonPassed !== true/);
+  assert.match(source,/aiResult\?\.faceComparisonPassed === true/);
+  assert.match(source,/faceComparisonPassed: faceOnly \? faceComparisonPassed : FieldValue\.delete\(\)/);
+  assert.match(admin,/item\.faceComparisonPassed === true/);
+  assert.match(python,/"faceComparisonPassed": face_comparison_passed/);
   assert.match(source,/issuerReviewAttested/);
   assert.match(source,/reviewIssuerEvidence\(/);
   assert.match(source,/requireOperationalAdmin/);
@@ -131,6 +138,17 @@ test("historical face-only decision is never auto Verified; Admin issuer attesta
   assert.match(admin,/eligibleFaceOnly/);
   assert.match(admin,/item.evidenceAvailable === true/);
 });
+test("uncertain or missing Python face-pass flag fails closed at Node decision boundary",()=>{
+  const match=source.match(/const faceComparisonPassed = ([\s\S]*?)\s*;\n\s*\/\/ A face match cannot compensate/);
+  assert.ok(match,"Production gateway must derive face pass from private AI answer");
+  const evaluate=(faceOnly,rawDecision,aiResult)=>vm.runInNewContext(match[1],{faceOnly,rawDecision,aiResult});
+  assert.equal(evaluate(true,"manual_review",{faceComparisonPassed:true}),true);
+  assert.equal(evaluate(true,"manual_review",{faceComparisonPassed:false}),false);
+  assert.equal(evaluate(true,"manual_review",{}),false);
+  assert.equal(evaluate(true,"failed",{faceComparisonPassed:true}),false);
+  assert.equal(evaluate(false,"manual_review",{faceComparisonPassed:true}),false);
+});
+
 test("screenshot layout remains with two National ID cards, but no OCR in enabled original mode",()=>{
   assert.match(web,/\.\.\.\(idType === "passport" \? \[\] : \[/);
   assert.match(web,/Back of National ID/);
