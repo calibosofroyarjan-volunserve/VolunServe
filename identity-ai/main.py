@@ -1870,8 +1870,22 @@ async def verify_identity(
                 status_code=500,
                 detail="The face-only AI comparison could not complete.",
             ) from None
+        # The historical matcher intentionally returns manual_review for both
+        # above-threshold and uncertain similarities. Only its success branch
+        # includes matchThreshold. Preserve the matcher byte-for-byte, but send
+        # an explicit fail-closed match flag to the Node/Admin review gate.
+        score = result.get("matchScore")
+        threshold = result.get("matchThreshold")
+        face_comparison_passed = (
+            result.get("decision") == "manual_review"
+            and isinstance(score, (int, float)) and not isinstance(score, bool)
+            and isinstance(threshold, (int, float)) and not isinstance(threshold, bool)
+            and 0 <= score <= 1 and 0 <= threshold <= 1
+            and score >= threshold
+        )
         return {
             **result,
+            "faceComparisonPassed": face_comparison_passed,
             "idType": "national_id",
             "faceOnly": True,
             "documentScreening": {
