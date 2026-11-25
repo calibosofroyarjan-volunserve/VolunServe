@@ -34,11 +34,12 @@ type IdentityReview = {
   identityStatus?: string;
   identityVerified?: boolean;
   aiDecision?: string;
+  faceComparisonPassed?: boolean;
   decision?: string;
   matchScore?: number | null;
   livenessScore?: number | null;
   documentScreening?: DocumentScreening;
-  reviewTrack?: "blurry_id_review" | "priority_admin_review" | "standard_admin_review" | "none";
+  reviewTrack?: "blurry_id_review" | "priority_admin_review" | "standard_admin_review" | "face_only_admin_review" | "none";
   message?: string;
   requiresManualReview?: boolean;
   evidenceAvailable?: boolean;
@@ -718,7 +719,15 @@ function ReviewDetail({
   const weakImage = blurry || idQuality === "low" || idQuality === "poor";
   const recognized = item.documentScreening?.status === "text_consistent_unverified" &&
     item.documentScreening?.declaredIdType === item.documentScreening?.detectedIdType;
-  const cannotApprove = blurry || !recognized ||
+  // Original face-only entries intentionally have NO OCR "recognized" marker.
+  // Only an Admin who independently attests the real National ID may approve.
+  const faceOnlyReview = item.verificationMethod === "volunserve_ai_face_only";
+  const eligibleFaceOnly = faceOnlyReview && nationalId &&
+    item.aiDecision === "manual_review" &&
+    item.faceComparisonPassed === true &&
+    item.evidenceAvailable === true;
+  const cannotApprove = blurry ||
+    (faceOnlyReview ? !eligibleFaceOnly : !recognized) ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
   const faceScore = typeof item.matchScore === "number" &&
     Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
@@ -735,10 +744,11 @@ function ReviewDetail({
     },
     {
       name:"Government ID type",
-      value:recognized ? declaredIdLabel + " (OCR consistent)" :
-        declaredIdLabel + " — not confirmed by OCR",
-      ok:recognized,
-      warning:!recognized,
+      value:faceOnlyReview ? "National ID portrait supplied; authenticity requires independent Admin check" :
+        recognized ? declaredIdLabel + " (OCR consistent)" :
+          declaredIdLabel + " — not confirmed by OCR",
+      ok:!faceOnlyReview && recognized,
+      warning:faceOnlyReview || !recognized,
     },
     {
       name:"Image quality",
@@ -749,7 +759,9 @@ function ReviewDetail({
     },
     {
       name:"Face matching",
-      value:faceScore === "Not evaluated" ? "Not yet evaluated" :
+      value:faceOnlyReview && item.faceComparisonPassed !== true
+        ? "Unsuccessful or uncertain comparison — request retry" :
+        faceScore === "Not evaluated" ? "Not yet evaluated" :
         faceScore + " preliminary similarity",
       ok:false,
       warning:false,
@@ -794,13 +806,13 @@ function ReviewDetail({
               {weakImage ? "Low · Blurry" : idQuality || "Not evaluated"}
             </Text>
           </View>
-          <View style={styles.premiumResultRow}>
+          {!faceOnlyReview ? <View style={styles.premiumResultRow}>
             <Text style={styles.premiumResultLabel}>ID Back Screening</Text>
             <Text style={styles.premiumResultValue}>
               {item.documentScreening?.backSideScreened === true
                 ? "Screened · Unverified" : "Not evaluated"}
             </Text>
-          </View>
+          </View> : null}
           <View style={styles.premiumResultRow}>
             <Text style={styles.premiumResultLabel}>AI Route</Text>
             <Text style={[styles.premiumResultValue,blurry && styles.premiumWarningText]}>
@@ -884,7 +896,7 @@ function ReviewDetail({
           <View style={styles.premiumEvidenceTiles}>
             {([
               {key:"front" as const,label:"Government ID — Front",icon:"id-card-outline" as const},
-              {key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const},
+              ...(faceOnlyReview ? [] : [{key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const}]),
               {key:"selfie" as const,label:"Live Selfie",icon:"person-outline" as const},
             ]).map(tile => {
               const uri = evidenceUris?.[tile.key];
@@ -965,7 +977,7 @@ function ReviewDetail({
             </View>
           </View>
           <Text style={styles.premiumDisclaimer}>
-            AI/OCR checks are preliminary and do not prove government ID authenticity, residency, or liveness.
+            {faceOnlyReview ? "Original 1-to-1 face comparison is a preliminary clue. No OCR or ID-text check was performed. Admin must independently validate the physical government ID; liveness is not proven." : "AI/OCR checks are preliminary and do not prove government ID authenticity, residency, or liveness."}
           </Text>
 
           {pending ? (
@@ -1008,7 +1020,7 @@ function ReviewDetail({
               </View>
               {cannotApprove ? (
                 <Text style={styles.premiumDecisionHint}>
-                  This ID has not passed the required document screening. Request a corrected scan before approval.
+                  {faceOnlyReview ? "Face-only submission requires an explicit comparison pass, retained private ID/selfie evidence and independent government ID review before approval. An uncertain result is NOT a successful match." : "This ID has not passed the required document screening. Request a corrected scan before approval."}
                 </Text>
               ) : null}
             </>
@@ -1046,7 +1058,7 @@ function ReviewDetail({
             <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
             <InfoLine label="AI decision" value={item.aiDecision || "—"} />
             <InfoLine label="Status" value={item.status || "—"} />
-            <DocumentScreeningSummary screening={item.documentScreening} />
+            {!faceOnlyReview ? <DocumentScreeningSummary screening={item.documentScreening} /> : null}
           </View>
         ) : activeTab === "audit" ? (
           <View style={styles.premiumCard}>
