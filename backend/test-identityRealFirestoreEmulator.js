@@ -94,7 +94,7 @@ async function scenario({
   missingIssuer=false,expiredIssuer=false,wrongIdType=false,
   faceCalibrated=true,padUnavailable=false,
   wrongSelfie=false,staleLease=false,
-  reuseUid=null,requestIdOverride=null,
+  reuseUid=null,requestIdOverride=null,proofId=null,
   decision="manual_review",
 }={}){
   const id=nextId();
@@ -121,7 +121,7 @@ async function scenario({
       verificationId,documentType:wrongIdType?"passport":docType,
       proofType:kind,
       proofKind:kind==="issuer"?"trusted_independent_issuer":"validated_presentation_attack_detection",
-      jti:"signedEvidence"+id,
+      jti:proofId||"signedEvidence"+id,
       iat:now-5,exp:now+(expiredIssuer&&kind==="issuer"?-1:120),
       [kind==="issuer"?"documentGenuine":"livePersonConfirmed"]:true,
     };
@@ -165,6 +165,12 @@ async function scenario({
       aiAttemptCount:0,aiAttemptCycle:1
     });
   }
+  const proofReplayRefs=autoCompletion.eligible ? {
+    issuer:db.collection("identityTrustedProofUses")
+      .doc(autoCompletion.trustedProofReplayKeys.issuer),
+    pad:db.collection("identityTrustedProofUses")
+      .doc(autoCompletion.trustedProofReplayKeys.pad),
+  }:null;
   async function finalize(){
     // Cloud Firestore SDK requires its transaction callback to return a
     // native host-realm Promise. The extracted production callback executes
@@ -179,7 +185,7 @@ async function scenario({
       userRef,verificationRef,evidenceRef,
       documentScreening,
       newEvidenceAssets:images,previousEvidenceAssets:null,
-      autoCompletion,automaticApproval,
+      autoCompletion,automaticApproval,proofReplayRefs,
       aiResult:{},decision,faceOnly,faceComparisonPassed:faceOnly,
       reviewTrack:faceOnly?"face_only_admin_review":"standard_admin_review",
       matchScore:0.89,livenessScore:null,recognizedSelectedId:true,
@@ -204,6 +210,7 @@ async function scenario({
     finalize,
     auditRef:db.collection("identityAutomationEvents").doc(uid+"_"+requestId),
     attemptRef:db.collection("identityVerificationAttempts").doc(uid+"_"+requestId),
+    proofReplayRefs,
   };
 }
 async function assertNeverApproved(fixture){
@@ -226,6 +233,8 @@ test("REAL emulator transaction: independently signed proof grants verified and 
   assert.equal((await f.verificationRef.get()).data().status,"verified");
   assert.equal((await f.auditRef.get()).data().decision,"trusted_auto_verified");
   assert.equal((await f.attemptRef.get()).data().automaticVerificationApplied,true);
+  assert.equal((await f.proofReplayRefs.issuer.get()).exists,true);
+  assert.equal((await f.proofReplayRefs.pad.get()).exists,true);
   const status=await readStatus(f.uid);
   assert.equal(status.statusCode,200);
   assert.equal(status.body.identityStatus,"verified");
@@ -265,6 +274,17 @@ test("REAL emulator: concurrent finalizers cannot create duplicate Verified even
   assert.equal((await f.userRef.get()).data().identityVerified,true);
   assert.equal((await f.auditRef.get()).exists,true);
   assert.equal((await f.attemptRef.get()).exists,true);
+});
+test("REAL emulator: reissued signed proof JWT IDs cannot approve a second Resident",async()=>{
+  const sharedProofId="reusedSignedProviderProof123";
+  const first=await scenario({proofId:sharedProofId});
+  assert.equal((await first.finalize()).status,"verified");
+  const second=await scenario({proofId:sharedProofId});
+  assert.equal(second.autoCompletion.eligible,true);
+  await assert.rejects(second.finalize(),e=>e.code==="trusted_proof_already_consumed");
+  assert.equal((await second.userRef.get()).data().identityVerified,false);
+  assert.equal((await second.auditRef.get()).exists,false);
+  assert.equal((await second.attemptRef.get()).exists,false);
 });
 test("REAL emulator: status lookup does not expose other Residents",async()=>{
   const f=await scenario();
