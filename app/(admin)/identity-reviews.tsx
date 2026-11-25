@@ -722,7 +722,8 @@ function ReviewDetail({
   // Only an Admin who independently attests the real National ID may approve.
   const faceOnlyReview = item.verificationMethod === "volunserve_ai_face_only";
   const eligibleFaceOnly = faceOnlyReview && nationalId &&
-    item.aiDecision === "verified" && item.evidenceAvailable === true;
+    (item.aiDecision === "verified" || item.aiDecision === "manual_review") &&
+    item.evidenceAvailable === true;
   const cannotApprove = blurry ||
     (faceOnlyReview ? !eligibleFaceOnly : !recognized) ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
@@ -1015,7 +1016,7 @@ function ReviewDetail({
               </View>
               {cannotApprove ? (
                 <Text style={styles.premiumDecisionHint}>
-                  {faceOnlyReview ? "Face-only submission needs a positive comparison, retained private ID/selfie evidence and an independent government ID review before approval." : "This ID has not passed the required document screening. Request a corrected scan before approval."}
+                  {faceOnlyReview ? "Face-only submission needs a completed AI comparison, retained private ID/selfie evidence and independent government ID validation before Admin approval." : "This ID has not passed the required document screening. Request a corrected scan before approval."}
                 </Text>
               ) : null}
             </>
