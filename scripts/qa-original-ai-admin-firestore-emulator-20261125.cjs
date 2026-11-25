@@ -201,7 +201,7 @@ assert.ok(modules[7].includes("probeIdentityAiReadiness({") &&
           modules[11].includes("self_identity_review_forbidden") &&
           modules[11].includes("reviewIssuerEvidence(") &&
           modules[11].includes("db.runTransaction(") &&
-          modules[14].includes("identity_evidence_consent_required") &&
+          modules[14].includes("document_evidence_consent_required") &&
           modules[15].includes("identityAttemptOutcome(decision, attemptCount)") &&
           modules[15].includes("automaticVerificationEligible"),
   "Refusing test of detached or substituted Admin/Resident logic");
