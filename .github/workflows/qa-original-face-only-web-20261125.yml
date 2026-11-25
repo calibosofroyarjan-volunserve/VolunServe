@@ -30,7 +30,14 @@ jobs:
               'app/(admin)/identity-reviews.tsx',
               'lib/identityVerification.ts',
             ].sort());
-            core.info('PASS: exact pre-Didit published Hosting basis, isolated web-only opt-in edits');
+            const original=await github.rest.repos.getContent({owner,repo,path:'app/identity-verification.web.tsx',ref:base});
+            const candidate=await github.rest.repos.getContent({owner,repo,path:'app/identity-verification.web.tsx',ref:context.sha});
+            const read=x=>Buffer.from(x.data.content,'base64').toString('utf8');
+            const styleTail=s=>s.slice(s.lastIndexOf('const styles = StyleSheet.create('));
+            assert.ok(styleTail(read(original)).startsWith('const styles = StyleSheet.create('));
+            assert.equal(styleTail(read(candidate)),styleTail(read(original)),
+              'Same design required: identity page styles must be byte-for-byte unchanged');
+            core.info('PASS: original published layout CSS/styles fully preserved, no redesign');
       - name: Check original and OCR UI remain distinct, default opt-in disabled
         run: |
           node - <<'JS'
@@ -40,7 +47,14 @@ jobs:
           const admin=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
           assert.ok(ui.includes('EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true"'));
           assert.ok(ui.includes('if (FACE_ONLY_MODE) {'));
-          assert.ok(ui.includes('faceOnlyMode || idType === "passport"'));
+          assert.ok(ui.includes('...(idType === "passport" ? [] : ['));
+          assert.ok(ui.includes('Front of National ID'));
+          assert.ok(ui.includes('Back of National ID'));
+          assert.ok(ui.includes('Optional for face comparison'));
+          assert.ok(ui.includes('idCaptureGridDesktop'));
+          assert.ok(ui.includes('Open Camera'));
+          assert.ok(ui.includes('Upload File'));
+          assert.ok(ui.includes('Government ID Details'));
           assert.ok(ui.includes('!FACE_ONLY_MODE && movementRef.current.stage'));
           assert.ok(ui.includes('Continue to Face Scan'));
           assert.ok(ui.includes('No OCR') || ui.includes('no OCR'));
@@ -52,7 +66,7 @@ jobs:
           assert.ok(admin.includes('eligibleFaceOnly'));
           assert.ok(admin.includes('issuerReviewAttested'));
           assert.ok(admin.includes('item.evidenceAvailable === true'));
-          console.log('PASS: only opted-in original flow skips OCR and back scan; old flow preserved');
+          console.log('PASS: screenshot layout retained (both ID cards); original face-only skips OCR and does NOT require back scan; old flow preserved');
           JS
       - name: Compile TypeScript without deploying or using credentials
         run: |
