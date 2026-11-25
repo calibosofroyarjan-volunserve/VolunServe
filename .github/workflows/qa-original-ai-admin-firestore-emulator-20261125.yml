@@ -43,6 +43,7 @@ jobs:
               ['backend/selectedIdPolicy.js',live],
               ['backend/identityIssuerReviewPolicy.js',live],
               ['backend/identityPrivateEvidence.js',live],
+              ['backend/identityAiReadiness.js',live],
               ['backend/adminAccess.js',live],
               ['backend/verifiedFirebaseToken.js',live],
               ['scripts/qa-original-ai-admin-firestore-emulator-20261125.cjs',context.sha],
