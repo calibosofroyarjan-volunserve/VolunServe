@@ -436,11 +436,11 @@ async function fetchWithTimeout(
  * Check the deployed Python AI engine before submitting private identity
  * media or consuming an AI attempt. This endpoint requires Firebase auth.
  */
-export async function checkIdentityEngineReady(): Promise<void> {
+export async function checkIdentityEngineReady(faceOnly = false): Promise<void> {
   const user = await getAuthenticatedUser();
   const token = await user.getIdToken();
   const response = await fetchWithTimeout(
-    `${getBackendBaseUrl()}/api/identity/engine-health`,
+    `${getBackendBaseUrl()}${faceOnly ? '/api/identity/face-engine-health' : '/api/identity/engine-health'}`,
     {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
@@ -469,7 +469,12 @@ export async function checkIdentityEngineReady(): Promise<void> {
  */
 export const submitIdentityVerification = async (
   input: SubmitIdentityVerificationInput,
+  options: { faceOnly?: boolean } = {},
 ): Promise<IdentityVerificationResult> => {
+  const faceOnly = options.faceOnly === true;
+  if (faceOnly && input.idType !== "national_id") {
+    throw new Error("Original face-only verification accepts the National ID portrait only.");
+  }
   if (!input?.idType) {
     throw new Error("Select the government ID type.");
   }
@@ -479,7 +484,7 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
-  if (input.idType !== "passport") {
+  if (input.idType !== "passport" && !faceOnly) {
     validateMedia(
       input.idBackDocument || undefined,
       "Government ID back image",
@@ -526,8 +531,9 @@ export const submitIdentityVerification = async (
     input.selfie,
   );
 
-  const endpoint =
-    `${getBackendBaseUrl()}/api/identity/verify-with-evidence`;
+  const endpoint = faceOnly
+    ? `${getBackendBaseUrl()}/api/identity/verify-face-only`
+    : `${getBackendBaseUrl()}/api/identity/verify-with-evidence`;
 
   const response = await fetchWithTimeout(
     endpoint,
