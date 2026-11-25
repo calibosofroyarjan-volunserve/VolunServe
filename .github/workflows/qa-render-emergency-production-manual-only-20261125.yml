@@ -1,0 +1,54 @@
+name: QA Render Emergency Production Manual-Only (NO DEPLOY)
+on:
+  pull_request:
+    branches: [backend-live-protected]
+    paths: [backend/renderEmergencyAutoInvites.js, backend/test-emergency-production-manual-only.cjs, .github/workflows/qa-render-emergency-production-manual-only-20261125.yml]
+permissions:
+  contents: read
+jobs:
+  offline-manual-mode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact reviewed PR commit, no submodules
+        env:
+          REVIEW_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init -q .
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -c protocol.version=2 fetch --no-tags --depth=2 origin "$REVIEW_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$REVIEW_SHA"
+      - name: Verify pinned Render base and exactly three safe changed paths
+        run: |
+          set -euo pipefail
+          BASE=c4d133c6aa7ab1a8a60810ade8e460302a61818f
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "$BASE"
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const cp=require("node:child_process");
+          const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          const base="c4d133c6aa7ab1a8a60810ade8e460302a61818f";
+          assert.equal(git("rev-list","--parents","-n","1","HEAD").split(" ")[1],base,
+            "BLOCKED: candidate must be one commit directly atop exact live Render backend");
+          const diff=git("diff","--name-only","--no-renames",base,"HEAD").split("\n").filter(Boolean).sort();
+          const allowed=[
+            ".github/workflows/qa-render-emergency-production-manual-only-20261125.yml",
+            "backend/renderEmergencyAutoInvites.js",
+            "backend/test-emergency-production-manual-only.cjs"
+          ].sort();
+          assert.deepEqual(diff,allowed,"BLOCKED: unrelated Firebase/AI/backend server/config files changed");
+          console.log("PASS exact 3-file backend candidate; production AI untouched");
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline backend manual-only regression checks
+        run: |
+          node --check backend/renderEmergencyAutoInvites.js
+          node --check backend/test-emergency-production-manual-only.cjs
+          node --test backend/test-emergency-production-manual-only.cjs
+      - name: No deployment
+        run: echo "Only synthetic local tests. Nothing was published or changed in Firebase or Render."
