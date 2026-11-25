@@ -1,0 +1,49 @@
+name: Original Face-Only LIVE Route Negative Auth QA - No Deploy
+on:
+  push:
+    branches: [release/original-face-only-hosting-20261125]
+    paths: [.github/workflows/qa-original-ai-production-routes-20261125.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-negative-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm Python and Node additive LIVE routes require authentication
+        run: |
+          node - <<'JS'
+          const cases=[
+            ["python health","https://volunserve-identity-ai.onrender.com/health","GET",200],
+            ["node health","https://volunserve.onrender.com/health","GET",200],
+            ["python new private route","https://volunserve-identity-ai.onrender.com/verify-face-only","POST",401],
+            ["node new authenticated route","https://volunserve.onrender.com/api/identity/verify-face-only","POST",401],
+            ["node new authenticated engine status","https://volunserve.onrender.com/api/identity/face-engine-health","GET",401],
+            ["node existing Admin review","https://volunserve.onrender.com/api/admin/identity/reviews","GET",401]
+          ];
+          (async()=>{
+            for(const [name,url,method,expected] of cases){
+              const r=await fetch(url,{method,redirect:"error",
+                signal:AbortSignal.timeout(55000),headers:{"User-Agent":"VolunServe-Original-FaceOnly-GET-Only-Anonymous-QA"}});
+              if(r.status!==expected)throw Error(name+" expected HTTP "+expected+" got "+r.status);
+              if(name==="node health"){
+                const obj=await r.json();
+                if(obj.ok!==true||obj.assistanceEvidenceStorage!=="secure_cloudinary_configured")
+                  throw Error("Production private Cloudinary backend is not configured");
+              }
+              if(name==="python health"){
+                const obj=await r.json();
+                if(obj.ok!==true||obj.verificationEngineReady!==true||obj.internalAuthConfigured!==true)
+                  throw Error("Production original Python face matcher health not ready");
+              }
+              console.log("PASS",name,"HTTP",r.status);
+            }
+          })().catch(e=>{console.error("BLOCKED:",e.message);process.exitCode=1});
+          JS
+      - name: No production mutation
+        run: |
+          echo 'PASS NO-DEPLOY: no Firebase token, no provider credential, no images, no uploads, no secrets'
