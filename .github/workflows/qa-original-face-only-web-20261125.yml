@@ -27,6 +27,7 @@ jobs:
             assert.deepEqual((r.data.files||[]).map(x=>x.filename).sort(),[
               '.github/workflows/qa-original-face-only-web-20261125.yml',
               'app/identity-verification.web.tsx',
+              'app/(admin)/identity-reviews.tsx',
               'lib/identityVerification.ts',
             ].sort());
             core.info('PASS: exact pre-Didit published Hosting basis, isolated web-only opt-in edits');
@@ -36,6 +37,7 @@ jobs:
           const fs=require('node:fs'),assert=require('node:assert/strict');
           const ui=fs.readFileSync('app/identity-verification.web.tsx','utf8');
           const api=fs.readFileSync('lib/identityVerification.ts','utf8');
+          const admin=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
           assert.ok(ui.includes('EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true"'));
           assert.ok(ui.includes('if (FACE_ONLY_MODE) {'));
           assert.ok(ui.includes('faceOnlyMode || idType === "passport"'));
@@ -46,6 +48,10 @@ jobs:
           assert.ok(api.includes('/api/identity/verify-face-only'));
           assert.ok(api.includes('/api/identity/verify-with-evidence'));
           assert.ok(api.includes('options.faceOnly === true'));
+          assert.ok(admin.includes('volunserve_ai_face_only'));
+          assert.ok(admin.includes('eligibleFaceOnly'));
+          assert.ok(admin.includes('issuerReviewAttested'));
+          assert.ok(admin.includes('item.evidenceAvailable === true'));
           console.log('PASS: only opted-in original flow skips OCR and back scan; old flow preserved');
           JS
       - name: Compile TypeScript without deploying or using credentials
