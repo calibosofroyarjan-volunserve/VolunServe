@@ -118,6 +118,25 @@ test("GPS publishing is private, case-scoped, stops with case and task status",(
   assert.match(webMap,/responseLocations/);
 });
 
+test("Native Resident sees only an active, case-specific private Volunteer GPS pin",()=>{
+  assert.match(nativeMap,/activeVolunteerSupportAssignmentId/);
+  assert.match(nativeMap,/doc\(db, "responseAssignments", trackedVolunteerAssignmentId\)/);
+  assert.match(nativeMap,/doc\(db, "responseLocations", volunteerUid\)/);
+  assert.match(nativeMap,/gps\.assignmentId === trackedVolunteerAssignmentId/);
+  assert.match(nativeMap,/gps\.caseId === focusedCaseId/);
+  assert.match(nativeMap,/\["responding", "on_site"\]\.includes\(String\(assignment\.status\)\)/);
+  assert.match(nativeMap,/trackedVolunteerCase\?\.reportedBy === CURRENT_USER_ID/);
+  assert.match(nativeMap,/gpsClock - lastUpdate > 120_000/);
+  assert.match(nativeMap,/validCityRoute\(\[/);
+  assert.match(nativeMap,/Assigned Volunteer · live GPS/);
+  assert.match(nativeMap,/not verified arrival or guaranteed road ETA/);
+  assert.doesNotMatch(nativeMap,/collection\(db, "responseLocations"\)/);
+  // Existing official LGU pins and Volunteer GPS publishing must survive.
+  assert.match(nativeMap,/visibleLguVehiclePins\.filter/);
+  assert.match(nativeMap,/setDoc\(doc\(db, "responseLocations", CURRENT_USER_ID\)/);
+  assert.match(rules,/match \/responseLocations\/\{uid\}/);
+});
+
 test("Admin does not auto-resolve a Volunteer case without full Resident confirmation",()=>{
   assert.match(admin,/item\.residentConfirmationStatus !== "resident_confirmed"/);
   assert.match(admin,/item\.residentConfirmationOutcome !== "fully_helped"/);
