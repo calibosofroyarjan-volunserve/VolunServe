@@ -103,9 +103,17 @@ function verifyTrustedSignedProof({
         nowSeconds - payload.iat > MAXIMUM_TTL_SECONDS)
       reject();
 
+    // Stable, domain-separated one-time-use ID for this signed attestation.
+    // The raw JWT, identity number and provider proof jti never enter Firestore.
+    // Deliberately exclude uid/request so the same provider jti cannot be
+    // consumed by a second Resident or a newly issued verification attempt.
+    const replayKey = crypto.createHash("sha256")
+      .update(JSON.stringify([AUDIENCE, provider, expectedIssuer, payload.jti]))
+      .digest("hex");
     const out = {
       uid, verificationId, proofKind: spec.proofKind,
       serverValidated: true, signatureVerified: true,
+      trustedProofReplayKey: replayKey,
     };
     out[spec.successClaim] = true;
     return Object.freeze(out);
