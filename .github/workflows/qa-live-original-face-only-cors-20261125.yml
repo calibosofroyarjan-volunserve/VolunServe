@@ -1,0 +1,109 @@
+name: Live Original Face-Only Browser CORS and Auth Safety (READ ONLY)
+on:
+  push:
+    branches: [qa/live-original-face-only-browser-cors-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-browser-transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Ensure no production or app code changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='4308ff0eef985dcd0777c96906e61540bb9d7fd2';
+            const c=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(c.data.behind_by,0);
+            assert.deepEqual((c.data.files||[]).map(x=>x.filename),[
+              '.github/workflows/qa-live-original-face-only-cors-20261125.yml'
+            ]);
+            core.info('PASS: ONLY read-only workflow changed, production identity source untouched');
+      - name: Check actually deployed website revision, authorized CORS and untrusted origin denial
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const BASE='https://volunserve.onrender.com';
+          const ORIGIN='https://volunserve.com';
+          const expectedSha='e8bb5308b1e0bbd477d0c6721aee83a66ebd2dde';
+          async function req(url,options){
+            return fetch(url,{
+              redirect:'error',signal:AbortSignal.timeout(55000),...options
+            });
+          }
+          (async()=>{
+            let r=await req('https://volunserve.com/volunserve-release.json');
+            assert.equal(r.status,200,'Live release marker should be publicly readable');
+            const marker=await r.json();
+            assert.equal(marker.revision,expectedSha,'BLOCKED: live Hosting changed');
+            console.log('PASS live Hosting exact identity face-only release',marker.revision.slice(0,12));
+            r=await req(BASE+'/health',{headers:{Origin:ORIGIN}});
+            assert.equal(r.status,200,'Node backend health unavailable');
+            assert.equal(r.headers.get('access-control-allow-origin'),ORIGIN,
+              'Browser Origin not allowed by backend');
+            const health=await r.json();
+            assert.equal(health.assistanceEvidenceStorage,'secure_cloudinary_configured',
+              'Existing production Cloudinary configuration absent');
+            console.log('PASS live Node health, configured Cloudinary, browser CORS');
+            for(const [method,path] of [
+              ['POST','/api/identity/verify-face-only'],
+              ['GET','/api/identity/face-engine-health'],
+              ['GET','/api/admin/identity/reviews'],
+            ]){
+              const r=await req(BASE+path,{
+                method:'OPTIONS',
+                headers:{
+                  Origin:ORIGIN,
+                  'Access-Control-Request-Method':method,
+                  'Access-Control-Request-Headers':'authorization,content-type',
+                },
+              });
+              assert.ok(r.status>=200&&r.status<300,
+                'CORS preflight HTTP '+r.status+' on '+path);
+              assert.equal(r.headers.get('access-control-allow-origin'),ORIGIN,
+                'Missing browser allow-origin for '+path);
+              const methods=(r.headers.get('access-control-allow-methods')||'').toLowerCase();
+              assert.ok(methods.includes(method.toLowerCase()),
+                'Missing allowed method '+method+' for '+path);
+              const headers=(r.headers.get('access-control-allow-headers')||'').toLowerCase();
+              assert.ok(headers.includes('authorization')&&headers.includes('content-type'),
+                'Browser must be able to send Authorization and multipart request');
+              console.log('PASS browser OPTIONS',method,path,'HTTP',r.status);
+            }
+            for(const [method,path] of [
+              ['POST','/api/identity/verify-face-only'],
+              ['GET','/api/identity/face-engine-health'],
+              ['GET','/api/admin/identity/reviews'],
+            ]){
+              const r=await req(BASE+path,{method,headers:{Origin:ORIGIN}});
+              assert.equal(r.status,401,
+                'Unauthenticated browser request must be denied on '+path);
+              assert.equal(r.headers.get('access-control-allow-origin'),ORIGIN,
+                'Browser cannot read its own auth errors on '+path);
+              console.log('PASS unauthenticated access denied',method,path,'HTTP',r.status);
+            }
+            r=await req(BASE+'/api/identity/verify-face-only',{
+              method:'OPTIONS',
+              headers:{
+                Origin:'https://untrusted-invalid.example',
+                'Access-Control-Request-Method':'POST',
+                'Access-Control-Request-Headers':'authorization,content-type',
+              }
+            });
+            assert.notEqual(r.headers.get('access-control-allow-origin'),
+              'https://untrusted-invalid.example','Untrusted CORS origin allowed');
+            console.log('PASS malicious browser origin excluded');
+            console.log('SUMMARY: live Origin + Node face-only browser transport works; NO ID upload or Firebase token attempted.');
+          })().catch(e=>{console.error('BLOCKED:',e.message);process.exitCode=1;});
+          JS
+      - name: No production mutations
+        run: |
+          echo 'GET/OPTIONS and unauthenticated POST only; no real user ID/selfie, production writes or paid actions'
