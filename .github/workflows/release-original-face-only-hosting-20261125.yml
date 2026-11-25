@@ -46,7 +46,9 @@ jobs:
           assert.deepEqual(changed,[
             '.github/workflows/qa-original-face-only-hosting-release-20261125.yml',
             '.github/workflows/qa-original-ai-production-routes-20261125.yml',
+            '.github/workflows/qa-original-ai-hosting-immutable-backup-20261125.yml',
             '.github/workflows/release-original-face-only-hosting-20261125.yml',
+            'scripts/original-ai-hosting-pinned-rollback-20261125.cjs',
             'app/(admin)/identity-reviews.tsx',
             'app/identity-verification.web.tsx',
             'lib/identityVerification.ts'
@@ -130,35 +132,45 @@ jobs:
           console.log('PASS: existing Hosting credential targets intended Firebase project');
           JS
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/original-ai-hosting-prod.json" >> "$GITHUB_ENV"
-      - name: Recheck unchanged live Hosting, create BACKUP, deploy ONLY Hosting, verify or ROLLBACK
+      - name: Pin exact immutable LIVE Hosting version; deploy ONLY Hosting; verify or RESTORE original version
         shell: bash
         run: |
           set -euo pipefail
           export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
           node scripts/check-live-hosting.cjs
-          npx firebase-tools hosting:clone "$SITE:live" "$SITE:$BACKUP_CHANNEL" --project "$SITE" --non-interactive
-          echo "BACKUP_DONE: Existing VolunServe Hosting cloned before any changes"
-          ROLLBACK_REQUIRED=0
-          if ! npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive; then
-            ROLLBACK_REQUIRED=1
-          fi
-          if [ "$ROLLBACK_REQUIRED" = 0 ]; then
-            export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
-            SUCCESS=0
-            for attempt in 1 2 3 4 5 6; do
-              if node scripts/check-live-hosting.cjs; then SUCCESS=1;break;fi
-              sleep 12
-            done
-            if [ "$SUCCESS" = 1 ]; then
-              echo "RELEASE_SUCCESS: Original face-only UI deployed; other live modules untouched."
-              exit 0
+          PIN="$RUNNER_TEMP/original-face-only-pinned-immutable-hosting.json"
+          node scripts/original-ai-hosting-pinned-rollback-20261125.cjs selftest
+          node scripts/original-ai-hosting-pinned-rollback-20261125.cjs capture "$PIN"
+          node scripts/original-ai-hosting-pinned-rollback-20261125.cjs check "$PIN"
+          echo "BACKUP_PINNED: existing exact Firebase Hosting live version is ready for immutable restore"
+          # Roll back this exact pinned, previously LIVE version if deployment OR
+          # any post-deploy verification fails. No preview-channel creation needed.
+          DEPLOY_STARTED=0
+          restore_if_failed() {
+            STATUS=$?
+            trap - EXIT
+            if [ "$STATUS" -ne 0 ] && [ "$DEPLOY_STARTED" = 1 ]; then
+              echo "::error::Hosting publication failed verification. Attempting exact-version Firebase Hosting rollback."
+              if node scripts/original-ai-hosting-pinned-rollback-20261125.cjs rollback "$PIN"; then
+                export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
+                node scripts/check-live-hosting.cjs || echo "::error::Rollback accepted; old public marker still unverified."
+              else
+                echo "::error::Automatic exact-version rollback could not complete; manual Firebase Hosting rollback required."
+              fi
             fi
-            ROLLBACK_REQUIRED=1
-          fi
-          if [ "$ROLLBACK_REQUIRED" = 1 ]; then
-            echo "::error::Original AI Hosting verification failed; restoring previous Hosting from backup."
-            npx firebase-tools hosting:clone "$SITE:$BACKUP_CHANNEL" "$SITE:live" --project "$SITE" --non-interactive || echo "::error::Hosting rollback failed; manual restoration required"
-            export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
-            node scripts/check-live-hosting.cjs || true
-            exit 1
-          fi
+            exit "$STATUS"
+          }
+          trap restore_if_failed EXIT
+          # Final compare to avoid a race with another Hosting deployment.
+          node scripts/original-ai-hosting-pinned-rollback-20261125.cjs check "$PIN"
+          DEPLOY_STARTED=1
+          npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
+          export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
+          VERIFIED=0
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then VERIFIED=1;break;fi
+            sleep 12
+          done
+          test "$VERIFIED" = 1 || { echo "::error::New live Hosting revision could not be confirmed"; exit 1; }
+          trap - EXIT
+          echo "RELEASE_SUCCESS: original face-only UI published on exact previous live baseline; no other modules deployed"
