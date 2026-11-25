@@ -52,4 +52,5 @@ jobs:
       - name: Check LIVE published revision has not moved
         run: VOLUNSERVE_EXPECTED_SHA=a35d708829047fe86f04d988ad21966457ccbdea node scripts/check-live-hosting.cjs
       - name: NO DEPLOY
-        run: echo 'QA ONLY: no live change'
+        run: |
+          echo 'QA ONLY: no live change'
