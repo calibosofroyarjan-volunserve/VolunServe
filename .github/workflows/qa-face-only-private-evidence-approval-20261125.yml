@@ -47,6 +47,14 @@ jobs:
         run: |
           node --test backend/tests/identityFaceOnlyReviewEvidence.test.js
           echo "PASS: synthetic metadata checks only, no production credentials, no real faces, no uploads or Admin decisions"
+      - name: Run existing synthetic identity evidence and manual approval regressions
+        run: |
+          node --test backend/test-identityPrivateEvidence.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-review-reject.js
+          node --test backend/test-identity-three-attempt-review.js
+          node --test backend/test-identityIssuerReviewPolicy.js
+          echo "PASS: existing private evidence, no-auto-verify, retry and manual issuer checks"
       - name: Verify runtime code never automatically upgrades Resident after face comparison
         run: |
           node <<'JS'
