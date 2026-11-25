@@ -3,7 +3,7 @@ import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import DisasterResponse from "../../components/DisasterResponse";
 import MapTracking from "../../components/tabs/MapTracking";
 
@@ -16,6 +16,13 @@ export default function EmergencyReportsScreen() {
   const params = useLocalSearchParams<{ view?: string; caseId?: string }>();
   const router = useRouter();
   const active = params.view === "tracking" || !!params.caseId;
+  const callEmergencyServices = async () => {
+    try {
+      await Linking.openURL("tel:911");
+    } catch {
+      Alert.alert("Dial 911", "Could not open the dialer. Please call 911 directly if there is immediate danger.");
+    }
+  };
   const changeView = (view: "report" | "tracking") => {
     router.setParams({ view, caseId: undefined });
   };
@@ -25,6 +32,7 @@ export default function EmergencyReportsScreen() {
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>EMERGENCY REPORTS</Text>
           <Text style={styles.subtitle}>Incident reporting and live LGU response in one place</Text>
+          <Text style={styles.emergencyDisclaimer}>VolunServe does not call or dispatch 911 automatically.</Text>
         </View>
         <View style={styles.switchTabs}>
           <Pressable
@@ -46,6 +54,15 @@ export default function EmergencyReportsScreen() {
           >
             <Ionicons name="map-outline" size={16} color={active ? "#FFFFFF" : "#246958"} />
             <Text style={[styles.tabLabel, active && styles.activeLabel]}>Live Response Map</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Call national emergency hotline 911"
+            onPress={() => void callEmergencyServices()}
+            style={styles.call911Button}
+          >
+            <Ionicons name="call-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.call911Text}>Call 911</Text>
           </Pressable>
         </View>
       </View>
@@ -70,5 +87,8 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: "#087A62", borderColor: "#087A62" },
   tabLabel: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#246958", lineHeight: designUi.type.label.lineHeight,},
   activeLabel: { color: "#FFFFFF", fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
+  emergencyDisclaimer: { fontSize: 11, color: "#9A3412", fontWeight: "600" },
+  call911Button: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 38, paddingHorizontal: 13, borderRadius: 9, backgroundColor: "#B91C1C" },
+  call911Text: { color: "#FFFFFF", fontWeight: "800", fontSize: 13 },
   content: { flex: 1, minHeight: 0 },
 });

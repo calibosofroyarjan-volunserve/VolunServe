@@ -537,90 +537,6 @@ export default function VolunteerTasks() {
         completed: "on_site",
       };
 
-    const people =
-      Number(peopleHelped);
-
-    if (next === "completed") {
-      if (
-        situationSummary.trim().length < 10
-      ) {
-        Alert.alert(
-          "Situation Summary Required",
-          "Describe the actual situation you observed on site in at least 10 characters."
-        );
-        return;
-      }
-
-      if (!contributionType.trim()) {
-        Alert.alert(
-          "Contribution Type Required",
-          "Select the type of assistance you provided."
-        );
-        return;
-      }
-
-      if (
-        contributionSummary.trim().length < 10
-      ) {
-        Alert.alert(
-          "Assistance Provided Required",
-          "Describe the assistance you actually provided in at least 10 characters."
-        );
-        return;
-      }
-
-      if (
-        !Number.isInteger(people) ||
-        people < 0 ||
-        people > 999
-      ) {
-        Alert.alert(
-          "People Helped",
-          "Enter a whole number from 0 to 999."
-        );
-        return;
-      }
-
-      if (
-        remainingNeeds.includes("Other") &&
-        remainingNeedsNote.trim().length < 3
-      ) {
-        Alert.alert(
-          "Describe Other Need",
-          "Add a short note describing the other remaining need."
-        );
-        return;
-      }
-
-      if (
-        remainingNeedsNote.trim().length > 1500
-      ) {
-        Alert.alert(
-          "Remaining Needs Note",
-          "Remaining-needs notes must be 1500 characters or fewer."
-        );
-        return;
-      }
-
-      if (lguFollowUpRequired === null) {
-        Alert.alert(
-          "LGU Follow-up Required?",
-          "Select Yes or No so LGU/Admin knows whether further action is needed."
-        );
-        return;
-      }
-
-      if (
-        completionNotes.trim().length > 600
-      ) {
-        Alert.alert(
-          "Completion Notes",
-          "Completion notes must be 600 characters or fewer."
-        );
-        return;
-      }
-    }
-
     try {
       setBusyId(assignment.id);
       setError("");
@@ -702,24 +618,8 @@ export default function VolunteerTasks() {
             }
           }
 
-          if (next === "completed") {
-            if (!caseId || !caseData) {
-              throw new Error(
-                "The linked emergency case could not be loaded. The field report cannot be submitted."
-              );
-            }
-
-            const barangay =
-              String(
-                caseData.reporterBarangay ||
-                  ""
-              ).trim();
-
-            if (barangay.length < 2) {
-              throw new Error(
-                "The emergency case has no valid barangay. Ask LGU/Admin to correct the case before completing this mission."
-              );
-            }
+          if (next === "completed" && (!caseId || !caseData)) {
+            throw new Error("The linked emergency case is unavailable. Refresh the task before marking it complete.");
           }
 
           const patch:
@@ -740,29 +640,15 @@ export default function VolunteerTasks() {
           }
 
           if (next === "completed") {
-            patch.contributionType =
-              contributionType
-                .trim()
-                .slice(0, 100);
-
-            patch.contributionSummary =
-              contributionSummary
-                .trim()
-                .slice(0, 1200);
-
-            patch.peopleHelped =
-              people;
-
-            patch.completionNotes =
-              completionNotes
-                .trim()
-                .slice(0, 600);
-
-            patch.completedAt =
-              serverTimestamp();
-
-            patch.residentConfirmationStatus =
-              "pending";
+            // Preserve the existing responseAssignment completion contract.
+            // No volunteerFieldReports document is created and no assistance
+            // is asserted without a Resident's separate confirmation.
+            patch.contributionType = "Task completion";
+            patch.contributionSummary = "Volunteer marked task complete; no field report was submitted.";
+            patch.peopleHelped = 0;
+            patch.completionNotes = "";
+            patch.completedAt = serverTimestamp();
+            patch.residentConfirmationStatus = "pending";
           }
 
           transaction.update(
@@ -770,90 +656,7 @@ export default function VolunteerTasks() {
             patch
           );
 
-          if (
-            next === "completed" &&
-            caseId &&
-            caseData
-          ) {
-            const volunteerName =
-              String(
-                current.volunteerName ||
-                  profile.fullName ||
-                  "Volunteer"
-              )
-                .trim()
-                .slice(0, 120) ||
-              "Volunteer";
-
-            const barangay =
-              String(
-                caseData.reporterBarangay ||
-                  ""
-              )
-                .trim()
-                .slice(0, 120);
-
-            transaction.set(
-              doc(
-                db,
-                "volunteerFieldReports",
-                assignment.id
-              ),
-              {
-                assignmentId:
-                  assignment.id,
-                caseId,
-
-                volunteerId:
-                  user.uid,
-                volunteerName,
-                barangay,
-
-                situationSummary:
-                  situationSummary
-                    .trim()
-                    .slice(0, 2000),
-
-                assistanceProvided:
-                  contributionSummary
-                    .trim()
-                    .slice(0, 2000),
-
-                peopleHelped:
-                  people,
-
-                remainingNeeds:
-                  remainingNeeds.slice(
-                    0,
-                    12
-                  ),
-
-                remainingNeedsNote:
-                  remainingNeedsNote
-                    .trim()
-                    .slice(0, 1500),
-
-                lguFollowUpRequired:
-                  lguFollowUpRequired ===
-                  true,
-
-                evidenceUrls: [],
-
-                reportStatus:
-                  "submitted",
-
-                adminReviewNote: "",
-
-                createdAt:
-                  serverTimestamp(),
-                updatedAt:
-                  serverTimestamp(),
-
-                reviewedAt: null,
-                reviewedBy: "",
-              }
-            );
-          }
+          
 
           if (
             next !== "declined" &&
@@ -910,10 +713,10 @@ export default function VolunteerTasks() {
                 },
                 completed: {
                   title:
-                    "Volunteer field report submitted",
+                    "Volunteer task marked complete",
                   message:
-                    `${responderName} completed the assigned support response and submitted a field report to LGU/Admin. ` +
-                    "LGU will review any remaining needs and decide the next action.",
+                    `${responderName} marked their emergency support task complete. ` +
+                    "Resident confirmation and Admin review are still required.",
                 },
               };
 
@@ -973,8 +776,8 @@ export default function VolunteerTasks() {
         );
       } else {
         Alert.alert(
-          "Field Report Submitted",
-          "Your mission completion and field report were sent to LGU/Admin. This does not automatically close the emergency case. LGU will review any remaining needs and decide the next action."
+          "Task Completed",
+          "Your emergency support task is marked complete. Resident confirmation and Admin review are still required before the case can be closed."
         );
 
         resetCompletion();
@@ -1560,42 +1363,14 @@ export default function VolunteerTasks() {
                     </TouchableOpacity>
                   )}
 
-                  {status ===
-                    "on_site" && (
+                  {status === "on_site" && (
                     <TouchableOpacity
-                      style={
-                        styles.completeButton
-                      }
-                      onPress={() => {
-                        if (
-                          completionId ===
-                          assignment.id
-                        ) {
-                          resetCompletion();
-                        } else {
-                          resetCompletion();
-                          setCompletionId(
-                            assignment.id
-                          );
-                        }
-                      }}
+                      style={[styles.completeButton, busy && styles.disabled]}
+                      disabled={busy}
+                      onPress={() => transitionAssignment(assignment, "completed")}
                     >
-                      <Ionicons
-                        name="checkmark-done"
-                        size={18}
-                        color="#ffffff"
-                      />
-
-                      <Text
-                        style={
-                          styles.actionButtonText
-                        }
-                      >
-                        {completionId ===
-                        assignment.id
-                          ? "Hide Field Report"
-                          : "Complete & Report to LGU"}
-                      </Text>
+                      {busy ? <ActivityIndicator color="#ffffff" /> : <Ionicons name="checkmark-done" size={18} color="#ffffff" />}
+                      <Text style={styles.actionButtonText}>{busy ? "Saving…" : "Mark Task Complete"}</Text>
                     </TouchableOpacity>
                   )}
 
@@ -1646,7 +1421,7 @@ export default function VolunteerTasks() {
                           styles.completedText
                         }
                       >
-                        Field report submitted to LGU/Admin
+                        Task completed — awaiting confirmation
                       </Text>
                     </View>
                   )}
@@ -1672,413 +1447,7 @@ export default function VolunteerTasks() {
                     </View>
                   )}
 
-                  {completionId ===
-                    assignment.id &&
-                    status ===
-                      "on_site" && (
-                      <View
-                        style={
-                          styles.completionPanel
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.completionTitle
-                          }
-                        >
-                          Mission Completion & Field Report
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.completionHint
-                          }
-                        >
-                          Report what you actually observed and did on site. LGU/Admin will use this report to review remaining needs and decide the next action.
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          Situation observed on site
-                        </Text>
-
-                        <TextInput
-                          style={[
-                            styles.input,
-                            styles.multilineInput,
-                          ]}
-                          multiline
-                          value={
-                            situationSummary
-                          }
-                          onChangeText={
-                            setSituationSummary
-                          }
-                          maxLength={2000}
-                          placeholder="Describe the actual condition of the resident, household, or affected area when you arrived."
-                          placeholderTextColor="#94a3b8"
-                        />
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          Contribution type
-                        </Text>
-
-                        <View
-                          style={
-                            styles.typeGrid
-                          }
-                        >
-                          {COMPLETION_TYPES.map(
-                            (item) => {
-                              const selected =
-                                contributionType ===
-                                item;
-
-                              return (
-                                <TouchableOpacity
-                                  key={item}
-                                  style={[
-                                    styles.typeButton,
-                                    selected &&
-                                      styles.typeButtonActive,
-                                  ]}
-                                  onPress={() =>
-                                    setContributionType(
-                                      item
-                                    )
-                                  }
-                                >
-                                  <Text
-                                    style={[
-                                      styles.typeButtonText,
-                                      selected &&
-                                        styles.typeButtonTextActive,
-                                    ]}
-                                  >
-                                    {item}
-                                  </Text>
-                                </TouchableOpacity>
-                              );
-                            }
-                          )}
-                        </View>
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          Assistance actually provided
-                        </Text>
-
-                        <TextInput
-                          style={[
-                            styles.input,
-                            styles.multilineInput,
-                          ]}
-                          multiline
-                          value={
-                            contributionSummary
-                          }
-                          onChangeText={
-                            setContributionSummary
-                          }
-                          maxLength={1200}
-                          placeholder="Describe what you actually did during this assigned support response."
-                          placeholderTextColor="#94a3b8"
-                        />
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          People helped
-                        </Text>
-
-                        <TextInput
-                          style={
-                            styles.input
-                          }
-                          keyboardType="number-pad"
-                          value={
-                            peopleHelped
-                          }
-                          onChangeText={(
-                            value
-                          ) =>
-                            setPeopleHelped(
-                              value
-                                .replace(
-                                  /[^0-9]/g,
-                                  ""
-                                )
-                                .slice(
-                                  0,
-                                  3
-                                )
-                            )
-                          }
-                          placeholder="0"
-                          placeholderTextColor="#94a3b8"
-                        />
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          Remaining needs observed
-                          {" "}
-                          (optional)
-                        </Text>
-
-                        <View
-                          style={
-                            styles.typeGrid
-                          }
-                        >
-                          {FIELD_NEED_OPTIONS.map(
-                            (item) => {
-                              const selected =
-                                remainingNeeds.includes(
-                                  item
-                                );
-
-                              return (
-                                <TouchableOpacity
-                                  key={item}
-                                  style={[
-                                    styles.typeButton,
-                                    selected &&
-                                      styles.needButtonActive,
-                                  ]}
-                                  onPress={() =>
-                                    toggleRemainingNeed(
-                                      item
-                                    )
-                                  }
-                                >
-                                  <Text
-                                    style={[
-                                      styles.typeButtonText,
-                                      selected &&
-                                        styles.needButtonTextActive,
-                                    ]}
-                                  >
-                                    {item}
-                                  </Text>
-                                </TouchableOpacity>
-                              );
-                            }
-                          )}
-                        </View>
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          Remaining-needs details
-                          {" "}
-                          (optional)
-                        </Text>
-
-                        <TextInput
-                          style={[
-                            styles.input,
-                            styles.multilineInputSmall,
-                          ]}
-                          multiline
-                          value={
-                            remainingNeedsNote
-                          }
-                          onChangeText={
-                            setRemainingNeedsNote
-                          }
-                          maxLength={1500}
-                          placeholder="Add details that LGU/Admin should verify, such as temporary shelter, food, clothing, medicine, or other recovery needs."
-                          placeholderTextColor="#94a3b8"
-                        />
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          Does LGU/Admin still need to follow up?
-                        </Text>
-
-                        <View
-                          style={
-                            styles.followUpRow
-                          }
-                        >
-                          <TouchableOpacity
-                            style={[
-                              styles.followUpButton,
-                              lguFollowUpRequired ===
-                                true &&
-                                styles.followUpButtonActive,
-                            ]}
-                            onPress={() =>
-                              setLguFollowUpRequired(
-                                true
-                              )
-                            }
-                          >
-                            <Ionicons
-                              name="alert-circle-outline"
-                              size={16}
-                              color={
-                                lguFollowUpRequired ===
-                                true
-                                  ? "#ffffff"
-                                  : "#b45309"
-                              }
-                            />
-
-                            <Text
-                              style={[
-                                styles.followUpButtonText,
-                                lguFollowUpRequired ===
-                                  true &&
-                                  styles.followUpButtonTextActive,
-                              ]}
-                            >
-                              Yes, follow-up needed
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[
-                              styles.followUpButton,
-                              lguFollowUpRequired ===
-                                false &&
-                                styles.followUpButtonSafe,
-                            ]}
-                            onPress={() =>
-                              setLguFollowUpRequired(
-                                false
-                              )
-                            }
-                          >
-                            <Ionicons
-                              name="checkmark-circle-outline"
-                              size={16}
-                              color={
-                                lguFollowUpRequired ===
-                                false
-                                  ? "#ffffff"
-                                  : "#16845b"
-                              }
-                            />
-
-                            <Text
-                              style={[
-                                styles.followUpButtonText,
-                                lguFollowUpRequired ===
-                                  false &&
-                                  styles.followUpButtonTextActive,
-                              ]}
-                            >
-                              No further field follow-up
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          Completion notes
-                          {" "}
-                          (optional)
-                        </Text>
-
-                        <TextInput
-                          style={[
-                            styles.input,
-                            styles.multilineInputSmall,
-                          ]}
-                          multiline
-                          value={
-                            completionNotes
-                          }
-                          onChangeText={
-                            setCompletionNotes
-                          }
-                          maxLength={600}
-                          placeholder="Any other operational note for LGU/Admin."
-                          placeholderTextColor="#94a3b8"
-                        />
-
-                        <View
-                          style={
-                            styles.trustNotice
-                          }
-                        >
-                          <Ionicons
-                            name="shield-checkmark-outline"
-                            size={18}
-                            color="#078F82"
-                          />
-
-                          <Text
-                            style={
-                              styles.trustNoticeText
-                            }
-                          >
-                            Submitting this form reports your field findings to LGU/Admin and completes only your Volunteer assignment. It does not close the emergency case, approve relief goods, or grant service credit automatically.
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.submitCompletionButton,
-                            busy &&
-                              styles.disabled,
-                          ]}
-                          disabled={busy}
-                          onPress={() =>
-                            transitionAssignment(
-                              assignment,
-                              "completed"
-                            )
-                          }
-                        >
-                          {busy ? (
-                            <ActivityIndicator
-                              color="#ffffff"
-                            />
-                          ) : (
-                            <>
-                              <Ionicons
-                                name="document-text-outline"
-                                size={18}
-                                color="#ffffff"
-                              />
-
-                              <Text
-                                style={
-                                  styles.actionButtonText
-                                }
-                              >
-                                Submit Field Report & Complete
-                              </Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                  
                 </View>
               </View>
             );

@@ -2481,7 +2481,19 @@ export default function MyCases() {
                               </View>
                             </View>
 
-                            {!!assignment.contributionSummary && (
+                            {assignment.status === "completed" &&
+                              assignment.contributionType === "Task completion" && (
+                              <View style={styles.contributionBox}>
+                                <Text style={styles.infoLabel}>Volunteer task completed</Text>
+                                <Text style={styles.infoText}>
+                                  The Volunteer marked the response task complete. This does not prove that assistance was delivered.
+                                  Please confirm what actually happened below.
+                                </Text>
+                              </View>
+                            )}
+
+                            {!!assignment.contributionSummary &&
+                              assignment.contributionType !== "Task completion" && (
                               <View
                                 style={
                                   styles.contributionBox
