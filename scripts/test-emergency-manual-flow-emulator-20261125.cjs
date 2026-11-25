@@ -296,6 +296,50 @@ async function main() {
     assert.equal((await assertSucceeds(getDoc(doc(admin,"disasterCases",PARTIAL_CASE)))).data().status,"assigned");
     console.log("PASS: Partially Helped recorded; case not automatically resolved");
 
+    // Manual Volunteer decline and Admin re-offer reuse the same assignment
+    // document. A declined/re-offered task must never turn on GPS early.
+    const REOFFER_CASE = "qa-reoffer-case";
+    const REOFFER = "qa-reoffer-case_qa-volunteer";
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(),"disasterCases",REOFFER_CASE),{
+        reporterUid:RESIDENT,status:"validated",verificationStatus:"validated",
+      });
+    });
+    const reofferRef = doc(admin,"responseAssignments",REOFFER);
+    await assertSucceeds(setDoc(reofferRef,{
+      caseId:REOFFER_CASE,volunteerId:VOLUNTEER,
+      volunteerName:"Synthetic Volunteer",caseTitle:"Synthetic manual re-offer",
+      status:"offered",createdBy:ADMIN,createdAt:stamp(),updatedAt:stamp(),
+    }));
+    const reofferVolunteerRef = doc(volunteer,"responseAssignments",REOFFER);
+    await assertSucceeds(updateDoc(reofferVolunteerRef,{
+      status:"declined",updatedAt:stamp(),
+    }));
+    assert.equal((await assertSucceeds(getDoc(reofferVolunteerRef))).data().status,"declined");
+    await assertFails(setDoc(gpsRef,{
+      ...payload,assignmentId:REOFFER,caseId:REOFFER_CASE,
+    }));
+    await assertFails(updateDoc(reofferVolunteerRef,{
+      status:"responding",responseStartedAt:stamp(),updatedAt:stamp(),
+    }));
+    await assertSucceeds(updateDoc(reofferRef,{
+      status:"offered",updatedAt:stamp(),
+    }));
+    await assertFails(setDoc(gpsRef,{
+      ...payload,assignmentId:REOFFER,caseId:REOFFER_CASE,
+    }));
+    await assertSucceeds(updateDoc(reofferVolunteerRef,{
+      status:"accepted",updatedAt:stamp(),
+    }));
+    await assertFails(updateDoc(reofferVolunteerRef,{
+      status:"completed",completedAt:stamp(),updatedAt:stamp(),
+    }));
+    await assertSucceeds(updateDoc(reofferVolunteerRef,{
+      status:"responding",responseStartedAt:stamp(),updatedAt:stamp(),
+    }));
+    assert.equal((await assertSucceeds(getDoc(reofferVolunteerRef))).data().status,"responding");
+    console.log("PASS: manual Decline → Admin Re-offer → Accept → Responding, no premature GPS or skipped transitions");
+
   } finally {
     await env.cleanup();
   }
