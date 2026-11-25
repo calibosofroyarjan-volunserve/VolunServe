@@ -74,7 +74,7 @@ jobs:
           npm ci --prefix backend --ignore-scripts --no-audit --no-fund
           node --test backend/test-identityAiReadiness.js
           node --test backend/tests/verifiedFirebaseToken.test.js
-          node backend/test-communityCertificateAutoSync.js
+          (cd backend && node test-communityCertificateAutoSync.js)
           node --test backend/test-communityAttendanceAutoVerify.js
           node --test backend/test-communityCertificateEligibility.js
           node --test backend/test-communityCertificateIssuance.js
