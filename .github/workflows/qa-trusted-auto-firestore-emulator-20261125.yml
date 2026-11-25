@@ -6,6 +6,9 @@ on:
       - backend/test-identityRealFirestoreEmulator.js
       - backend/test-identityRealFirebaseAuthEmulator.js
       - backend/server.js
+      - backend/identityAutoApprovalGateway.js
+      - backend/identityTrustedAutomaticCompletion.js
+      - backend/identityTrustedSignedProof.js
       - backend/qa-identity-firestore-emulator.json
       - backend/qa-identity-firestore-emulator.rules
       - .github/workflows/qa-trusted-auto-firestore-emulator-20261125.yml
