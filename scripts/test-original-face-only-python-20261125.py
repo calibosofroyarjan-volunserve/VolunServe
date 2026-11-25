@@ -53,6 +53,9 @@ class Request:
 
 
 calls = {"face": 0, "ocr": 0}
+face_result = {"ok": True, "decision": "manual_review",
+               "matchScore": 0.64, "matchThreshold": 0.52,
+               "message": "Synthetic matched-face preliminary Admin review"}
 
 
 def require_internal_backend(key):
@@ -80,7 +83,7 @@ def run_face_verification(*, uid, id_document_bytes, selfie_bytes):
     calls["face"] += 1
     assert uid == "test_resident"
     assert id_document_bytes != selfie_bytes
-    return {"ok": True, "decision": "verified", "message": "Synthetic face match"}
+    return dict(face_result)
 
 
 def screen_government_id(**_kwargs):
@@ -126,7 +129,8 @@ async def check(route, id_type="national_id", *, match_photo=False, back=False, 
 async def main():
     reply = await check("/verify-face-only")
     assert reply["faceOnly"] is True
-    assert reply["decision"] == "verified"
+    assert reply["decision"] == "manual_review"
+    assert reply["faceComparisonPassed"] is True
     assert reply["documentScreening"]["status"] == "inconclusive"
     assert reply["documentScreening"]["authenticityVerified"] is False
     assert reply["documentScreening"]["manualReviewRequired"] is True
@@ -155,7 +159,22 @@ async def main():
     else:
         raise AssertionError("Existing OCR route accepted a missing back scan")
     print("PASS: unchanged OCR /verify still requires front and back")
-    print("SUCCESS: 6 isolated face-only Python tests; no SDKs, no real media, no deployment")
+    face_result.clear()
+    face_result.update({"ok": True, "decision": "manual_review", "matchScore": 0.38,
+                        "warnings": ["face_match_uncertain_uncalibrated"]})
+    uncertain = await check("/verify-face-only")
+    assert uncertain["faceComparisonPassed"] is False
+    assert uncertain["decision"] == "manual_review"
+    assert uncertain["documentScreening"]["authenticityVerified"] is False
+    print("PASS: below-threshold original manual_review explicitly NOT a face-match pass")
+
+    face_result.clear()
+    face_result.update({"ok": True, "decision": "failed", "matchScore": None})
+    no_face = await check("/verify-face-only")
+    assert no_face["faceComparisonPassed"] is False
+    print("PASS: missing/failed comparison cannot pass the Admin face-match gate")
+    assert calls == {"face": 3, "ocr": 0}
+    print("SUCCESS: 8 isolated face-only Python tests; no SDKs, no real media, no deployment")
 
 
 if __name__ == "__main__":
