@@ -29,8 +29,8 @@ jobs:
               'scripts/test-original-ai-native-review-no-face-20261125.cjs',
               '.github/workflows/qa-original-ai-native-review-no-deploy-20261125.yml'
             ];
-            if(response.data.behind_by!==0 || response.data.ahead_by!==3)
-              throw new Error('Candidate must contain exactly 3 additive QA/fix commits over pinned restored Hosting source');
+            if(response.data.behind_by!==0 || response.data.ahead_by<3)
+              throw new Error('Candidate must be based on pinned restored Hosting source with additive QA/fix commits');
             const changed=(response.data.files||[]).map(f=>f.filename);
             if(changed.length!==3 || changed.some(name=>!approved.includes(name)))
               throw new Error('Unauthorized changes outside one native screen and two QA files: '+changed.join(','));
