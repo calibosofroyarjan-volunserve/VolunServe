@@ -721,12 +721,20 @@ function ReviewDetail({
   } | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState("");
+  // Signed URL strings do not prove that the private image actually rendered.
+  // Never enable face-only Admin approval before both photos load.
+  const [loadedEvidenceUris, setLoadedEvidenceUris] = useState<{
+    front?: string | null; back?: string | null; selfie?: string | null;
+  }>({});
+  const [evidenceExpiresAt, setEvidenceExpiresAt] = useState(0);
   const [zoomedEvidence, setZoomedEvidence] = useState<string | null>(null);
   const [evidenceRefresh, setEvidenceRefresh] = useState(0);
   useEffect(() => { setActiveTab("review"); }, [item.uid, item.verificationId]);
   useEffect(() => {
     let active = true;
     setEvidenceUris(null);
+    setLoadedEvidenceUris({});
+    setEvidenceExpiresAt(0);
     setEvidenceError("");
     setZoomedEvidence(null);
     if (!viewer || !item.evidenceAvailable) {
@@ -745,7 +753,14 @@ function ReviewDetail({
         if (!response.ok || !body?.ok || body.verificationId !== item.verificationId) {
           throw new Error(body?.message || "The private evidence viewer is unavailable.");
         }
-        if (active) setEvidenceUris(body.images || null);
+        const expiresAt = Number(body.expiresAt);
+        if (!Number.isSafeInteger(expiresAt) || expiresAt * 1000 <= Date.now()) {
+          throw new Error("Protected photo links are expired or invalid. Refresh secure identity images.");
+        }
+        if (active) {
+          setEvidenceExpiresAt(expiresAt);
+          setEvidenceUris(body.images || null);
+        }
       } catch (error: any) {
         if (active) setEvidenceError(error?.message || "Unable to load protected identity photos.");
       } finally {
@@ -754,6 +769,18 @@ function ReviewDetail({
     })();
     return () => { active = false; };
   }, [viewer, item.uid, item.verificationId, item.evidenceAvailable, evidenceRefresh]);
+  // Render Free may stay open while an Admin reviews the evidence. Revoke
+  // readiness when the short-lived links expire, not only after a rerender.
+  useEffect(() => {
+    if (!evidenceExpiresAt) return;
+    const remaining = Math.max(0, evidenceExpiresAt * 1000 - Date.now());
+    const timer = setTimeout(() => {
+      setEvidenceUris(null);
+      setLoadedEvidenceUris({});
+      setEvidenceError("Protected photo links expired. Refresh secure identity images before approval.");
+    }, remaining);
+    return () => clearTimeout(timer);
+  }, [evidenceExpiresAt]);
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
   const blurry = item.reviewTrack === "blurry_id_review";
@@ -776,7 +803,11 @@ function ReviewDetail({
   // Fail closed if signed front ID/selfie views are missing, expired or failed
   // to load; the existing refresh control obtains new 3-minute URLs.
   const faceOnlyEvidenceReady = Boolean(
-    evidenceUris?.front && evidenceUris?.selfie && !evidenceLoading && !evidenceError
+    evidenceUris?.front && evidenceUris?.selfie &&
+    loadedEvidenceUris.front === evidenceUris.front &&
+    loadedEvidenceUris.selfie === evidenceUris.selfie &&
+    evidenceExpiresAt * 1000 > Date.now() &&
+    !evidenceLoading && !evidenceError
   );
   const cannotApprove = blurry ||
     (faceOnlyReview ? (!eligibleFaceOnly || !faceOnlyEvidenceReady) : !recognized) ||
@@ -966,7 +997,12 @@ function ReviewDetail({
                     {uri ? (
                       <Image source={{uri}} resizeMode="contain"
                         style={styles.premiumEvidencePhoto}
-                        accessibilityLabel={tile.label} />
+                        accessibilityLabel={tile.label}
+                        onLoad={() => setLoadedEvidenceUris(previous => ({...previous, [tile.key]: uri}))}
+                        onError={() => {
+                          setLoadedEvidenceUris(previous => ({...previous, [tile.key]: null}));
+                          setEvidenceError("A protected ID or selfie image could not be displayed. Refresh secure identity images or request a new scan.");
+                        }} />
                     ) : (
                       <>
                         {evidenceLoading ? <ActivityIndicator color="#08765A" /> :
@@ -1074,7 +1110,7 @@ function ReviewDetail({
                 <Text style={styles.premiumDecisionHint}>
                   {faceOnlyReview
                     ? !faceOnlyEvidenceReady
-                      ? "Load the protected National ID portrait and selfie first. Use Refresh secure identity images if the links expired. Approval remains blocked until both are available and independently reviewed."
+                      ? "Wait for both protected photos to display successfully. Refresh secure identity images if either fails or expires. Approval stays blocked until both are visible and independently reviewed."
                       : "Face-only submission requires an explicit comparison pass and independent National ID review. Uncertain face comparison cannot be approved."
                     : "This ID has not passed the required document screening. Request a corrected scan before approval."}
                 </Text>
