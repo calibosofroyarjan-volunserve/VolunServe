@@ -1391,6 +1391,79 @@ jobs:
             }
             // END PINNED SIGNUP CONSENT HOTFIX HOSTING-ONLY GATE
 
+            // BEGIN PINNED EMERGENCY AUDIT-ONLY EXCEPTION
+            // Exact non-deploying QA proposal. The default strict Hosting gate
+            // below remains in place for ALL other changes.
+            {
+              const audit=".github/workflows/audit-emergency-active-rules-emulator-20261125.yml";
+              const qa="scripts/qa-emergency-active-rules-emulator-20261125.cjs";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean).sort();
+              if(changed.length===3 &&
+                 changed.includes("A\t"+audit) &&
+                 changed.includes("A\t"+qa) &&
+                 changed.includes("M\t"+verifier)){
+                assert.equal(liveBase,"266ddfea4bb6302d3b8f897200e0e6bce3e02685",
+                  "BLOCKED: protected branch moved since audited QA exception");
+                assert.equal(blob(liveBase,verifier),"94a7bedaaf66381f7d9d71a82fdfc84430bfa446",
+                  "BLOCKED: baseline release verifier changed");
+                assert.equal(blob(commit,audit),"ddf8a015e7ad521ee2fbab3eba4146268d416713",
+                  "BLOCKED: audited no-deploy workflow bytes changed");
+                assert.equal(blob(commit,qa),"66cc4e2f44d5177b16c12f3a1ade7ae57431fcca",
+                  "BLOCKED: synthetic emulator test bytes changed");
+                for(const file of [audit,qa]) {
+                  assert.equal(git("ls-tree","--name-only",liveBase,"--",file),"",
+                    "BLOCKED: audit path already present in protected source: "+file);
+                }
+                const original=git("show",liveBase+":"+verifier);
+                const proposed=git("show",commit+":"+verifier);
+                const start="            // BEGIN PINNED EMERGENCY AUDIT-ONLY EXCEPTION\n";
+                const end="            // END PINNED EMERGENCY AUDIT-ONLY EXCEPTION\n";
+                const first=proposed.indexOf(start);
+                const last=proposed.indexOf(end,first);
+                assert(first>=0&&last>first&&proposed[last+end.length]==="\n",
+                  "BLOCKED: audit-only gate boundary changed");
+                assert.equal(proposed.slice(0,first)+proposed.slice(last+end.length+1),
+                  original,"BLOCKED: other release guard behavior modified");
+                for(const file of [
+                  "package.json","package-lock.json","firebase.json",".firebaserc",
+                  "firestore.rules","storage.rules","app.json","lib/firebase.ts",
+                  "backend/server.js","functions/index.js",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]) assert.equal(blob(commit,file),blob(liveBase,file),
+                  "BLOCKED: application, Firebase, backend or deployment policy changed: "+file);
+                const publishing=git("show",liveBase+
+                  ":.github/workflows/auto-publish-protected-live-hosting.yml");
+                assert(publishing.includes("paths:") &&
+                  !publishing.includes("audit-emergency-active-rules-emulator-20261125") &&
+                  !publishing.includes("qa-emergency-active-rules-emulator-20261125") &&
+                  !publishing.includes("verify-reconciled-hosting-source-no-deploy-20261111"),
+                  "BLOCKED: automatic Hosting publish could trigger from audit-only PR");
+                const releasing=git("show",liveBase+
+                  ":.github/workflows/release-live-protected-hosting.yml");
+                assert(releasing.includes("workflow_dispatch:") &&
+                  !releasing.includes("pull_request:") &&
+                  !releasing.includes("push:"),
+                  "BLOCKED: production Hosting release is not manual-only");
+                const wf=git("show",commit+":"+audit);
+                assert(wf.includes("permissions:\n  contents: read") &&
+                  wf.includes("github.event_name == 'workflow_dispatch'") &&
+                  wf.includes("github.ref == 'refs/heads/live-protected'") &&
+                  wf.includes("environment: production") &&
+                  wf.includes("method:'GET'") &&
+                  !wf.includes("pull_request_target:") &&
+                  !wf.includes("firebase deploy"),
+                  "BLOCKED: audit-only workflow missing read-only controls");
+                console.log("PASS: one-time exact two-file active-Rules audit proposal and unchanged release guards");
+                console.log("NO DEPLOY; published Hosting and protected application remain divergent");
+                return;
+              }
+            }
+            // END PINNED EMERGENCY AUDIT-ONLY EXCEPTION
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
