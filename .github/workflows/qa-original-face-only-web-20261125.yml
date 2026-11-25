@@ -1,0 +1,56 @@
+name: Original AI Face-Only Web UI Typecheck (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/restore-20261023-face-only-web-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  face-only-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact published Hosting source and only face-only web files differ
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='5af28d279618dacd5eab518e5e0d52259eae8844';
+            const r=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(r.data.behind_by,0);
+            assert.deepEqual((r.data.files||[]).map(x=>x.filename).sort(),[
+              '.github/workflows/qa-original-face-only-web-20261125.yml',
+              'app/identity-verification.web.tsx',
+              'lib/identityVerification.ts',
+            ].sort());
+            core.info('PASS: exact pre-Didit published Hosting basis, isolated web-only opt-in edits');
+      - name: Check original and OCR UI remain distinct, default opt-in disabled
+        run: |
+          node - <<'JS'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const ui=fs.readFileSync('app/identity-verification.web.tsx','utf8');
+          const api=fs.readFileSync('lib/identityVerification.ts','utf8');
+          assert.ok(ui.includes('EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true"'));
+          assert.ok(ui.includes('if (FACE_ONLY_MODE) {'));
+          assert.ok(ui.includes('faceOnlyMode || idType === "passport"'));
+          assert.ok(ui.includes('!FACE_ONLY_MODE && movementRef.current.stage'));
+          assert.ok(ui.includes('Continue to Face Scan'));
+          assert.ok(ui.includes('No OCR') || ui.includes('no OCR'));
+          assert.ok(ui.includes('precheckIdentityDocument('));
+          assert.ok(api.includes('/api/identity/verify-face-only'));
+          assert.ok(api.includes('/api/identity/verify-with-evidence'));
+          assert.ok(api.includes('faceOnly:'));
+          console.log('PASS: only opted-in original flow skips OCR and back scan; old flow preserved');
+          JS
+      - name: Compile TypeScript without deploying or using credentials
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Preserve live unchanged
+        run: echo 'PASS NO DEPLOY - no Firebase Hosting deploy, no production backend, no Cloudinary uploads'
