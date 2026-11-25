@@ -65,14 +65,14 @@ function getFirebaseApp() {
         String(env.VOLUNSERVE_STAGING_STRICT || "").toLowerCase() === "true") {
       const expectedAccount = getServiceAccount();
       assertOriginalAiStagingIsolation(env, expectedAccount);
-      // An SDK app initialized before this module must not silently reuse
-      // a production credential. If its project is unknown, fail closed.
-      const actualProject = String(existingApps[0]?.options?.projectId || "").trim();
-      if (!actualProject || actualProject !== expectedAccount?.project_id) {
-        throw new Error(
-          "Original AI staging isolation blocked: existing Firebase app project cannot be independently verified.",
-        );
-      }
+      // Firebase app.options.projectId is metadata, NOT proof that the
+      // app's credential belongs to that project. An existing Firebase app
+      // could have a correct project label but still hold a prod credential.
+      // Staging therefore always refuses SDK reuse before Auth/Firestore.
+      // The unchanged production path continues to reuse getApps()[0].
+      throw new Error(
+        "Original AI staging isolation blocked: previously initialized Firebase app refused because credential origin cannot be independently verified.",
+      );
     }
     return existingApps[0];
   }
