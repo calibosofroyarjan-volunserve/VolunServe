@@ -1,0 +1,45 @@
+name: Live AI Face-Only Readiness vs Free Plan Cold Start (READ ONLY)
+on:
+  push:
+    branches: [qa/original-face-only-live-coldstart-diag-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cold-start-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check live Python GET health safely without user media or credentials
+        run: |
+          node <<'JS'
+          const urls = [
+            ['python','https://volunserve-identity-ai.onrender.com/health'],
+            ['node','https://volunserve.onrender.com/health'],
+          ];
+          (async()=>{
+            for(const [service,url] of urls){
+              for(let n=1;n<=3;n++){
+                const t=Date.now();
+                try{
+                  const r=await fetch(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(55000),
+                    headers:{'Cache-Control':'no-cache'}});
+                  let body={};try{body=await r.json()}catch{}
+                  console.log(JSON.stringify({service,attempt:n,httpStatus:r.status,
+                    elapsedMs:Date.now()-t,ok:body.ok===true,
+                    verificationEngineReady:body.verificationEngineReady===true,
+                    internalAuthConfigured:body.internalAuthConfigured===true,
+                    cloudinaryStorage:body.assistanceEvidenceStorage||null}));
+                  if(r.status===200&&body.ok===true)break;
+                }catch(e){console.log(JSON.stringify({service,attempt:n,elapsedMs:Date.now()-t,
+                  failureType:e?.name||'network_error'}));}
+              }
+            }
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          JS
+      - name: No mutation
+        run: |
+          echo 'READ ONLY: public GET health endpoints; no ID/selfie, no Firestore/Cloudinary writes, no secrets, no production deploy'
