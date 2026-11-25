@@ -27,11 +27,13 @@ const attempt=()=>({
 });
 const issuer=(patch={})=>async()=>({
   uid,verificationId,proofKind:"trusted_independent_issuer",
-  serverValidated:true,signatureVerified:true,documentGenuine:true,...patch
+  serverValidated:true,signatureVerified:true,documentGenuine:true,
+  trustedProofReplayKey:"a".repeat(64),...patch
 });
 const pad=(patch={})=>async()=>({
   uid,verificationId,proofKind:"validated_presentation_attack_detection",
-  serverValidated:true,signatureVerified:true,livePersonConfirmed:true,...patch
+  serverValidated:true,signatureVerified:true,livePersonConfirmed:true,
+  trustedProofReplayKey:"b".repeat(64),...patch
 });
 const options=()=>({
   enabled:true,faceOnly:false,aiDecision:"manual_review",
@@ -48,7 +50,10 @@ test("explicitly validated issuer, PAD and calibrated face allow automatic compl
   const verified=await assessment();
   assert.equal(verified.eligible,true);
   const result=complete({...options(),assessment:verified});
-  assert.deepEqual(result,{eligible:true,reason:"trusted_issuer_pad_and_face_validated"});
+  assert.deepEqual(result,{
+    eligible:true,reason:"trusted_issuer_pad_and_face_validated",
+    trustedProofReplayKeys:{issuer:"a".repeat(64),pad:"b".repeat(64)},
+  });
 });
 test("default OFF: full provider proofs do not automatically grant privileges",async()=>{
   const settings=options();delete settings.enabled;
