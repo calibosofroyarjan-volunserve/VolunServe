@@ -7,6 +7,8 @@
  */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
+const path = require("node:path");
 const {initializeTestEnvironment, assertSucceeds, assertFails} = require("@firebase/rules-unit-testing");
 const {
   arrayUnion, collection, doc, getDoc, getDocs, query, setDoc,
@@ -25,10 +27,38 @@ const OUTSIDER = "qa-outsider";
 const CASE = "qa-incident";
 const OFFER = "qa-incident_qa-volunteer";
 
+// A trusted, read-only deployment audit may place the ACTIVE rules in a local
+// temp file. Replay the exact bytes ONLY against localhost emulators and verify
+// the audit's expected SHA-256 first. Never fetch rules or contact production here.
+function loadLocalRules() {
+  const override = process.env.VOLUNSERVE_QA_FIRESTORE_RULES_FILE || "";
+  const expected = (process.env.VOLUNSERVE_QA_EXPECTED_RULES_SHA256 || "").toLowerCase();
+  if (Boolean(override) !== Boolean(expected)) {
+    throw Error("External rules replay requires BOTH local file and expected SHA-256");
+  }
+  const defaultPath = path.resolve("firestore.rules");
+  const selectedPath = path.resolve(override || defaultPath);
+  if (override && selectedPath === defaultPath) {
+    throw Error("Refusing to label repository rules as deployed rules");
+  }
+  if (override && !/^[a-f0-9]{64}$/.test(expected)) {
+    throw Error("Invalid expected deployed rules SHA-256");
+  }
+  const rules = fs.readFileSync(selectedPath,"utf8");
+  const actual = crypto.createHash("sha256").update(rules).digest("hex");
+  if (override) {
+    assert.equal(actual, expected, "Deployed rules fixture hash mismatch; refusing unverified replay");
+    console.log("PASS: verified local deployed-rules fixture fingerprint " + actual);
+  } else {
+    console.log("NOTE: repository firestore.rules only; this run does NOT verify production permissions");
+  }
+  return rules;
+}
+
 async function main() {
   const env = await initializeTestEnvironment({
     projectId: PROJECT,
-    firestore: {rules: fs.readFileSync("firestore.rules","utf8")},
+    firestore: {rules: loadLocalRules()},
   });
   try {
     await env.clearFirestore();
