@@ -51,6 +51,7 @@ jobs:
             const expected=[
               '.github/workflows/qa-original-ai-failclosed-verified-status-20261125.yml',
               '.github/workflows/qa-original-ai-safe-release-gate-20261125.yml',
+              '.github/workflows/identity-final-integration-gate-no-deploy-20261112.yml',
               '.github/workflows/qa-original-ai-node-python-auth-handshake-20261125.yml',
               'scripts/qa-original-ai-node-python-auth-handshake-20261125.cjs',
               '.github/workflows/qa-original-ai-staging-provider-preflight-20261125.yml',
@@ -62,6 +63,12 @@ jobs:
             ].sort();
             const actual=(cmp.data.files||[]).map(f=>f.filename).sort();
             assert.deepEqual(actual,expected,'Unexpected code/UI/rules/workflow modification');
+            const legacyGate=await github.rest.repos.getContent({
+              owner,repo,path:'.github/workflows/identity-final-integration-gate-no-deploy-20261112.yml',ref:context.sha
+            });
+            const legacyYaml=Buffer.from(legacyGate.data.content,'base64').toString('utf8');
+            assert.match(legacyYaml,/Checkout protected Node candidate\\n\\s+uses: actions\\/checkout@v4\\n\\s+with:\\n\\s+fetch-depth: 0/,
+              'Legacy no-deploy identity gate checkout configuration invalid');
             const fetchText=async(filename,ref)=>{
               const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
               assert.equal(data.encoding,'base64','Missing immutable '+filename);
