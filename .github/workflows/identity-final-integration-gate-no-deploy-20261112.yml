@@ -19,6 +19,7 @@ jobs:
       - name: Checkout protected Node candidate
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
       - name: Checkout exact previously deployed production AI snapshot (read only)
         uses: actions/checkout@v4
         with:
