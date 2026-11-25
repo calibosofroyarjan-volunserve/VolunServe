@@ -96,6 +96,7 @@ async function scenario({
   wrongSelfie=false,staleLease=false,
   reuseUid=null,requestIdOverride=null,proofId=null,
   issuerProofId=null,padProofId=null,
+  profileOverrides={},
   decision="manual_review",
 }={}){
   const id=nextId();
@@ -160,7 +161,10 @@ async function scenario({
   const evidenceRef=db.collection("identityPrivateEvidence").doc(uid);
   // These records exist only inside the local disposable emulator.
   if(!reuseUid){
-    await userRef.create({identityStatus:"basic",identityVerified:false});
+    await userRef.create({
+      role:"resident",status:"approved",residentAccess:true,
+      identityStatus:"basic",identityVerified:false,...profileOverrides
+    });
     await verificationRef.create({
       processingRequestId:staleLease?"someoneElsesCapture":requestId,
       aiAttemptCount:0,aiAttemptCycle:1
@@ -301,6 +305,26 @@ for (const proofKind of ["issuer","pad"]) {
       error.code==="trusted_proof_already_consumed");
     assert.equal((await second.userRef.get()).data().identityVerified,false);
     assert.equal((await second.auditRef.get()).exists,false);
+  });
+}
+for (const [label,profile] of [
+  ["Volunteer", {role:"volunteer"}],
+  ["Admin", {role:"admin"}],
+  ["unapproved Resident", {status:"pending"}],
+  ["suspended Resident", {adminStatus:"suspended"}],
+  ["Resident without community access", {residentAccess:false}],
+  ["already-verified status", {identityStatus:"verified"}],
+]) {
+  test("REAL emulator: "+label+" cannot use trusted proofs to auto-promote",async()=>{
+    const f=await scenario({profileOverrides:profile});
+    assert.equal(f.autoCompletion.eligible,true,
+      "Synthetic provider proof is valid; transaction must still reject account");
+    await assert.rejects(f.finalize(),e=>e.code==="trusted_auto_resident_ineligible");
+    assert.equal((await f.userRef.get()).data().identityVerified,false);
+    assert.equal((await f.auditRef.get()).exists,false);
+    assert.equal((await f.attemptRef.get()).exists,false);
+    assert.equal((await f.proofReplayRefs.issuer.get()).exists,false);
+    assert.equal((await f.proofReplayRefs.pad.get()).exists,false);
   });
 }
 test("REAL emulator: status lookup does not expose other Residents",async()=>{

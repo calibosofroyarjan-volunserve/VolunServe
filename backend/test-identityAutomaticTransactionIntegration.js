@@ -78,9 +78,13 @@ const policy=vm.runInNewContext(policySource[0]+
   "\n({identityAttemptCount,identityAttemptOutcome})",{MAX_IDENTITY_AI_ATTEMPTS:3});
 
 const DELETE=Symbol("deleteSentinel");
-function makeDb(lease=requestId,verified=false,userExists=true){
+function makeDb(lease=requestId,verified=false,userExists=true,profileOverrides={}){
   const store={
-    users:userExists?{[uid]:{identityStatus:verified?"verified":"basic",identityVerified:verified}}:{},
+    users:userExists?{[uid]:{
+      role:"resident",status:"approved",residentAccess:true,
+      identityStatus:verified?"verified":"basic",identityVerified:verified,
+      ...profileOverrides
+    }}:{},
     identityVerifications:{[uid]:{processingRequestId:lease,aiAttemptCount:0,aiAttemptCycle:1}},
     identityPrivateEvidence:{},
     identityVerificationAttempts:{},
@@ -132,9 +136,9 @@ function makeDb(lease=requestId,verified=false,userExists=true){
 async function runScenario({
   enabled=false,faceOnly=false,withoutIssuer=false,
   badFace=false,badId=false,badSelfie=false,badPad=false,
-  lease=requestId,verified=false,userExists=true,decision="manual_review",
+  lease=requestId,verified=false,userExists=true,userOverrides={},decision="manual_review",
 }={}){
-  const data=makeDb(lease,verified,userExists);
+  const data=makeDb(lease,verified,userExists,userOverrides);
   const documentScreening=screening();
   if(badId)documentScreening.status="mismatch";
   const newEvidenceAssets=photos();
@@ -256,6 +260,22 @@ test("missing Resident profile: no create or grant",async()=>{
     e=>e.code==="identity_account_changed");
 });
 
+
+for (const [label,profile] of [
+  ["a Volunteer", {role:"volunteer"}],
+  ["an Admin", {role:"admin"}],
+  ["an unapproved Resident", {status:"pending"}],
+  ["a suspended Resident", {adminStatus:"suspended"}],
+  ["a Resident without community access", {residentAccess:false}],
+  ["a profile already marked verified", {identityStatus:"verified"}],
+]) {
+  test("trusted proof cannot auto-promote "+label,async()=>{
+    await assert.rejects(
+      runScenario({enabled:true,userOverrides:profile}),
+      e=>e.code==="trusted_auto_resident_ineligible"
+    );
+  });
+}
 
 /* Authenticated resident status endpoint: execute its real Express handler,
    with the SAME synthetic database that the identity transaction wrote. */

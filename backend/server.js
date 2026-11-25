@@ -5595,6 +5595,24 @@ app.post(
           throw makeHttpError(409, "identity_account_changed",
             "Your account verification status has changed. Please refresh your identity status.");
         }
+        // Trusted automatic promotion is restricted to an approved Basic
+        // Resident with active community access. A valid provider proof must
+        // never upgrade staff, volunteers, suspended or incomplete accounts.
+        // Enforce this INSIDE the atomic transaction so a concurrent account
+        // role/status change cannot bypass the earlier authentication checks.
+        const residentProfile = userSnapshot.data() || {};
+        if (autoCompletion.eligible && (
+          residentProfile.role !== "resident" ||
+          residentProfile.status !== "approved" ||
+          residentProfile.residentAccess !== true ||
+          String(residentProfile.adminStatus || "").toLowerCase() === "suspended" ||
+          !["basic", "pending"].includes(
+            String(residentProfile.identityStatus || "basic").toLowerCase()
+          )
+        )) {
+          throw makeHttpError(403, "trusted_auto_resident_ineligible",
+            "Only approved Basic Residents with active access may be automatically verified.");
+        }
         if (autoCompletion.eligible &&
             (issuerProofSnapshot?.exists || padProofSnapshot?.exists)) {
           throw makeHttpError(409, "trusted_proof_already_consumed",

@@ -105,7 +105,7 @@ async function createAccount({verifiedEmail=true,approvedProfile=true}={}){
   await auth.createUser({uid,email,password,emailVerified:verifiedEmail});
   if(approvedProfile){
     await db.collection("users").doc(uid).set({
-      role:"resident",status:"approved",
+      role:"resident",status:"approved",residentAccess:true,
       identityVerified:false,identityStatus:"basic",
     });
   }

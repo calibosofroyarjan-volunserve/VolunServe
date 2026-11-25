@@ -32,6 +32,19 @@ The technical portal says an approved relying party requires an active National 
 6. **Isolated authenticated E2E**: test Basic Resident -> upload -> issuer/PAD/face checks -> automatic Verified and profile update -> Admin audit, including every failure/mismatch branch in a verified isolated Firebase/Cloudinary/Render environment.
 7. **Guarded release**: review threat model, privacy, data retention and access controls; require explicit production approval. Keep manual Admin review fallback and instant kill-switch for automatic promotion.
 
+## Account-eligibility safeguard (QA only)
+
+The same Firestore transaction that consumes signed proofs now refuses automatic
+promotion unless the existing user profile has `role: resident`,
+`status: approved`, `residentAccess: true`, is not suspended, and
+`identityStatus` is Basic/Pending. Valid synthetic issuer/PAD attestations
+cannot upgrade Volunteers, Admins, suspended applicants, unapproved accounts
+or inconsistently already-verified profiles. Emulator tests assert these
+denials leave no Verified status, audit grant, or consumed proof.
+
+This safeguard does **not** make synthetic evidence a real issuer/PAD/face
+verification. Production remains default-off, unchanged and Admin-gated.
+
 ## Release gate (must remain blocked now)
 
 ```
