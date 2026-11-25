@@ -370,5 +370,122 @@ jobs:
             console.log('PASS: live Node policies safely consume real synthetic Python AI result, without Verified Resident elevation');
           })().catch(e=>{console.error(e.message);process.exitCode=1});
           NODE
-# All test identities and ID images are fabricated in RAM; localhost only,
-# no API calls to deployed Render, no Cloudinary upload or Firebase usage.
+      - name: Exercise positive and negative landmark-matching decisions with artificial geometry
+        working-directory: live-ai/identity-ai
+        env:
+          IDENTITY_AI_INTERNAL_KEY: local-qa-only-nonsecret
+        run: |
+          python - <<'PY'
+          # Fabricated landmark arrays are NOT photos or human biometric data.
+          # Stub only the detector output and quality check to exercise the
+          # real production normalization, geometry score, threshold, and
+          # review-routing code, while keeping actual images non-human.
+          from io import BytesIO
+          from unittest.mock import patch
+          import json, math
+          import numpy as np
+          from PIL import Image
+          import main
+
+          def sample_bytes():
+              out=BytesIO()
+              Image.new('RGB',(320,320),(242,243,244)).save(out,format='PNG')
+              return out.getvalue()
+
+          rng=np.random.default_rng(20261125)
+          first=rng.uniform(.2,.8,size=(468,2))
+          first[33]=[.35,.4]
+          first[263]=[.65,.4]
+          rotation=math.radians(14)
+          transform=np.array([
+              [math.cos(rotation),-math.sin(rotation)],
+              [math.sin(rotation),math.cos(rotation)]
+          ])
+          same=((first-.5)@transform.T)*.80+.5
+          different=rng.uniform(.2,.8,size=(468,2))
+          different[33]=[.35,.4]
+          different[263]=[.65,.4]
+
+          quality={'score':.96}
+          meta={'faceCount':1,'reason':''}
+          def exercise(id_landmarks,selfie_landmarks):
+              with patch.object(main,'face_landmarks',side_effect=[
+                  (id_landmarks,meta),(selfie_landmarks,meta)
+              ]), patch.object(main,'image_quality',return_value=quality):
+                  # Decode/image processing is real; face detector is replaced
+                  # because these are mathematical point arrays, not faces.
+                  return main.run_face_verification(
+                      uid='synthetic-landmark-qa-only',
+                      id_document_bytes=sample_bytes(),
+                      selfie_bytes=sample_bytes()
+                  )
+
+          positive=exercise(first,same)
+          assert positive['status']=='pending',positive
+          assert positive['decision']=='manual_review'
+          assert positive['matchScore']>=main.get_match_threshold()
+          assert positive['livenessImplemented'] is False
+          assert positive['livenessScore'] is None
+          assert positive.get('identityVerified') is not True
+          assert positive['engine']=='mediapipe-landmark-1to1-v1'
+          print('PASS: actual shape geometry returns positive synthetic landmark comparison as PENDING ADMIN only')
+
+          negative=exercise(first,different)
+          assert negative['status']=='pending',negative
+          assert negative['decision']=='manual_review'
+          assert negative['matchScore'] < main.get_match_threshold(),negative
+          assert negative['matchScore'] < positive['matchScore']
+          assert 'face_match_uncertain_uncalibrated' in negative['warnings']
+          assert negative['livenessImplemented'] is False
+          assert negative.get('identityVerified') is not True
+          print('PASS: differing artificial face-landmark geometry is NOT automatically approved')
+
+          with open('artificial-positive-result.json','w') as out:
+              json.dump({name:positive.get(name) for name in (
+                'status','decision','matchScore','livenessScore',
+                'livenessImplemented','identityVerified'
+              )},out)
+          PY
+      - name: Send artificial positive face outcome to deployed Node Admin gate
+        working-directory: live-ai/identity-ai
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const path=require('node:path');
+          const assert=require('node:assert/strict');
+          const backend=path.resolve('../backend');
+          const face=JSON.parse(fs.readFileSync('artificial-positive-result.json','utf8'));
+          const {enforceSelectedIdDecision}=require(backend+'/selectedIdPolicy.js');
+          const {assessAutomaticIdentityApproval}=require(backend+'/identityAutoApprovalGateway.js');
+          const screening={
+            status:'text_consistent_unverified',
+            declaredIdType:'national_id',detectedIdType:'national_id',
+            imageQualityStatus:'adequate',
+            profileNameCheck:'possible_match',
+            profileBirthDateCheck:'possible_match',
+            backSideScreened:true,backSideProvided:true,
+            warningCodes:[]
+          };
+          (async()=>{
+            assert.equal(face.status,'pending');
+            assert.equal(face.decision,'manual_review');
+            assert.equal(face.livenessImplemented,false);
+            assert.equal(enforceSelectedIdDecision(face.decision,screening,false),'manual_review');
+            assert.equal(enforceSelectedIdDecision('verified',screening,true),'manual_review');
+            const decision=await assessAutomaticIdentityApproval({
+              screening,
+              face:{result:'match',samePersonAssertion:true,
+                verificationId:'synthetic-id-only'},
+              attempt:{
+                uid:'synthetic-user',verificationId:'synthetic-id-only',
+                freshCapture:true,consentedEvidenceAvailable:true
+              }
+            });
+            assert.equal(decision.eligible,false);
+            assert.equal(decision.decision,'pending_admin_review');
+            assert.equal(decision.reason,'independent_provider_validators_not_configured');
+            console.log('PASS: artificial positive landmark match flows through real Node policy to Admin review, NOT Verified Resident');
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
+# Artificial MediaPipe landmark arrays are not genuine biometric samples.
+# Only the QA workflow was edited, no application source or live data changed.
