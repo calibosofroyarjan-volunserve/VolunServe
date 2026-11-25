@@ -1,0 +1,81 @@
+name: QA Trusted Identity - Actual Isolated Firestore Emulator (NO DEPLOY)
+on:
+  push:
+    branches: [qa/restore-trusted-automatic-identity-20261125]
+    paths:
+      - backend/test-identityRealFirestoreEmulator.js
+      - backend/server.js
+      - backend/qa-identity-firestore-emulator.json
+      - backend/qa-identity-firestore-emulator.rules
+      - .github/workflows/qa-trusted-auto-firestore-emulator-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-real-firestore-transaction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-trusted-auto-only
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8180
+      FIREBASE_PROJECT_ID: demo-volunserve-trusted-auto-only
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-trusted-auto-only
+      FIREBASE_CONFIG: '{"projectId":"demo-volunserve-trusted-auto-only"}'
+    steps:
+      - name: Check out immutable QA candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Java 21 for real Google Cloud Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Reject unexpected production access or environment
+        run: |
+          set -eu
+          node --check backend/test-identityRealFirestoreEmulator.js
+          node --check backend/server.js
+          node <<'JS'
+          const assert=require("node:assert/strict");
+          const f=require("./backend/qa-identity-firestore-emulator.json");
+          const p="demo-volunserve-trusted-auto-only";
+          assert.equal(process.env.GCLOUD_PROJECT,p);
+          assert.equal(process.env.FIREBASE_PROJECT_ID,p);
+          assert.equal(process.env.FIRESTORE_EMULATOR_HOST,"127.0.0.1:8180");
+          assert.equal(f.emulators.firestore.host,"127.0.0.1");
+          assert.equal(f.emulators.firestore.port,8180);
+          assert.equal(f.firestore.rules,"qa-identity-firestore-emulator.rules");
+          for(const k of [
+            "FIREBASE_SERVICE_ACCOUNT_JSON","GOOGLE_APPLICATION_CREDENTIALS",
+            "FIREBASE_TOKEN","CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+            "GOOGLE_OAUTH_ACCESS_TOKEN","GCLOUD_ACCESS_TOKEN"
+          ])assert.equal(process.env[k]||"","",k+" credential must not be present");
+          console.log("PASS: only a synthetic demo project and local-only emulator permitted");
+          JS
+      - name: Install locked backend Firebase Admin SDK
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Run REAL Firestore transaction and race tests in disposable emulator
+        run: |
+          set -euo pipefail
+          npm exec --yes --package=firebase-tools@15.37.0 -- \
+            firebase emulators:exec \
+            --only firestore \
+            --project demo-volunserve-trusted-auto-only \
+            --config backend/qa-identity-firestore-emulator.json \
+            "node backend/test-identityRealFirestoreEmulator.js"
+          echo "PASS: actual emulator reads, transactions, concurrency and Resident status"
+      - name: Prove no deployment was attempted
+        run: |
+          echo "NO DEPLOY: No Firebase production project, external credentials, Hosting, Render or Cloudinary used"
+          echo "The real trusted issuer/PAD API and hosted authenticated E2E remain UNVERIFIED"
+# Signed provider evidence here is synthetic using throwaway in-process keys.
+# The test is NOT proof of government ID authenticity, PAD reliability or face accuracy.
