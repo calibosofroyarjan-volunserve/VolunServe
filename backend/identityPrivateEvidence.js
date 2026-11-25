@@ -40,7 +40,7 @@ function validImageHeader(data, mime) {
 }
 
 // This runs only AFTER a successful AI response. Never log image bytes.
-async function parseConsentedIdentityEvidence(request, {requireSelfie = true} = {}) {
+async function parseConsentedIdentityEvidence(request, {requireSelfie = true, allowMissingBack = false} = {}) {
   if (!Buffer.isBuffer(request.body) ||
       !String(request.headers["content-type"] || "").toLowerCase().startsWith("multipart/form-data")) {
     throw evidenceError(400, "identity_media_missing", "Government ID and selfie files are required.");
@@ -60,7 +60,9 @@ async function parseConsentedIdentityEvidence(request, {requireSelfie = true} = 
   const images = {};
   for (const [slot, field] of FILES) {
     const file = form.get(field);
-    const optionalPassportReverse = slot === "back" && idType === "passport";
+    // Legacy face-only National ID compares the front portrait to the selfie.
+    // The server alone authorizes allowMissingBack on its guarded route.
+    const optionalPassportReverse = slot === "back" && (idType === "passport" || (allowMissingBack && idType === "national_id"));
     if (!file || typeof file.arrayBuffer !== "function") {
       if (optionalPassportReverse || (slot === "selfie" && !requireSelfie)) continue;
       throw evidenceError(400, "identity_evidence_incomplete",
