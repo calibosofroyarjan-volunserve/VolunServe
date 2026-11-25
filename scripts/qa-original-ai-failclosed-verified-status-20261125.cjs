@@ -16,7 +16,7 @@ const express=require("express");
 const {initializeApp,deleteApp}=require("firebase-admin/app");
 const {getAuth}=require("firebase-admin/auth");
 const {getFirestore,FieldValue}=require("firebase-admin/firestore");
-const {isOperationalAdminProfile}=require("./backend/adminAccess");
+const {isOperationalAdminProfile,isApprovedAccount}=require("./backend/adminAccess");
 const {selectedIdRecognized}=require("./backend/selectedIdPolicy");
 const {reviewIssuerEvidence}=require("./backend/identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken,isCompletedVolunServeProfile}=
@@ -48,7 +48,9 @@ const code=[
   section("function cleanText(","function normalizeAiDecision("),
   section("function normalizeIdDocumentScreening(","function getBearerToken("),
   section("function getBearerToken(","function getCloudinaryConfig("),
+  section("function isVerifiedResidentProfile(","async function loadUserProfile("),
   section("async function loadUserProfile(","async function requireVerifiedResident("),
+  section("async function requireVerifiedResident(","async function requireOperationalAdmin("),
   section("async function requireOperationalAdmin(","function isVerifiedLguPersonnelProfile("),
   section('app.get(\n  "/api/identity/status"', 'app.post(\n  ["/api/identity/verify"'),
   section('app.post(\n  "/api/admin/identity/reviews/:uid/decision"', 'app.post(\n  "/api/admin/assistance/requests/:requestId/start-review"')
@@ -62,9 +64,14 @@ assert.match(code,/identityVerified: true/);
 const install=new Function(
   "app","db","auth","isVerifiedFirebaseToken","isCompletedVolunServeProfile",
   "MAX_IDENTITY_AI_ATTEMPTS","console","FieldValue","isOperationalAdminProfile",
-  "selectedIdRecognized","reviewIssuerEvidence",code);
-install(app,db,auth,isVerifiedFirebaseToken,isCompletedVolunServeProfile,3,console,
-  FieldValue,isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence);
+  "selectedIdRecognized","reviewIssuerEvidence","isApprovedAccount",code+
+  "\nreturn {requireFirebaseUser,requireVerifiedResident};");
+const testMiddleware=install(app,db,auth,isVerifiedFirebaseToken,isCompletedVolunServeProfile,3,console,
+  FieldValue,isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence,isApprovedAccount);
+app.get("/__qa/verified-resident-guard",
+  testMiddleware.requireFirebaseUser,
+  testMiddleware.requireVerifiedResident,
+  (_req,response)=>response.json({ok:true,verifiedResidentAccess:true}));
 
 const clientSrc=fs.readFileSync(path.join(__dirname,"lib/identityVerification.ts"),"utf8");
 const nativeSrc=fs.readFileSync(path.join(__dirname,"app/identity-verification.tsx"),"utf8");
@@ -222,6 +229,8 @@ async function run(){
     const rejectTarget=await register("synthetic_reject_review_target_qa");
     const ocrOnly=await register("synthetic_ocr_only_review_target_qa");
     const unrecognized=await register("synthetic_unrecognized_review_target_qa");
+    const noResidentAccess=await register("synthetic_no_resident_access_qa");
+    const unapprovedResident=await register("synthetic_unapproved_resident_qa");
     await setIdentity(pending.uid,"pending");
     await setIdentity(failed.uid,"failed");
     await setIdentity(approved.uid,"verified");
@@ -263,6 +272,9 @@ async function run(){
         warningCodes:["school_id_not_supported"]
       }
     });
+    await db.collection("users").doc(unapprovedResident.uid).update({status:"pending"});
+    await setIdentity(noResidentAccess.uid,"verified");
+    await setIdentity(unapprovedResident.uid,"verified");
     await setIdentity(rollbackFailed.uid,"verified");
     await db.collection("users").doc(rollbackFailed.uid).update({identityVerified:false});
     await db.collection("identityVerifications").doc(rollbackFailed.uid).update({status:"failed"});
@@ -519,6 +531,56 @@ async function run(){
     assert.equal(got.data.identityStatus,"failed");
     assert.equal(got.data.identityVerified,false);
     pass("Admin rejection keeps Resident unverified and updates actual status endpoint");
+
+
+    // Exercise the EXACT privileged Resident middleware under one synthetic
+    // Test-only GET route. No application route/role logic is duplicated.
+    const gated=async token=>{
+      const response=await fetch(localBase()+"/__qa/verified-resident-guard",{
+        redirect:"error",headers:token?{authorization:"Bearer "+token}:{}
+      });
+      return {status:response.status,body:await response.json()};
+    };
+    const usersRef=uid=>db.collection("users").doc(uid);
+    for(const resident of [approved,inconsistentText,inconsistentFlag,
+      pending,basic,rollbackPending,rollbackFailed,noResidentAccess]){
+      await usersRef(resident.uid).update({
+        residentAccess:resident.uid!==noResidentAccess.uid
+      });
+    }
+    let protectedResult=await gated(null);
+    assert.equal(protectedResult.status,401);
+    pass("Restricted Resident endpoint requires Firebase Auth");
+    protectedResult=await gated(inconsistentText.token);
+    assert.equal(protectedResult.status,403);
+    assert.equal(protectedResult.body.error,"verified_resident_required");
+    pass("Stale Verified string without true approval flag cannot access restricted Resident features");
+    protectedResult=await gated(inconsistentFlag.token);
+    assert.equal(protectedResult.status,403);
+    pass("Identity flag=true with Basic status cannot access restricted Resident features");
+    protectedResult=await gated(pending.token);
+    assert.equal(protectedResult.status,200);
+    assert.equal(protectedResult.body.verifiedResidentAccess,true);
+    pass("Independent LGU Admin-approved Verified Resident can access protected Resident features");
+    protectedResult=await gated(approved.token);
+    assert.equal(protectedResult.status,200);
+    pass("Pre-existing consistently approved Verified Resident retains privileges");
+    protectedResult=await gated(basic.token);
+    assert.equal(protectedResult.status,403);
+    pass("Basic Resident remains blocked from Verified Resident-only features");
+    protectedResult=await gated(rollbackPending.token);
+    assert.equal(protectedResult.status,403);
+    pass("Pending review cannot access protected Resident features");
+    protectedResult=await gated(rollbackFailed.token);
+    assert.equal(protectedResult.status,403);
+    pass("Rejected/Failed Resident cannot access protected Resident features");
+    protectedResult=await gated(noResidentAccess.token);
+    assert.equal(protectedResult.status,403);
+    pass("Even fully verified identity cannot bypass residentAccess entitlement");
+    protectedResult=await gated(unapprovedResident.token);
+    assert.equal(protectedResult.status,403);
+    assert.equal(protectedResult.body.error,"registration_incomplete");
+    pass("Unapproved Resident cannot bypass account completion using Verified metadata");
 
     const attempts=await db.collection("identityVerificationAttempts").get();
     assert.equal(attempts.size,0);
