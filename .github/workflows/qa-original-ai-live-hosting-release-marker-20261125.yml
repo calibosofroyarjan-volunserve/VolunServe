@@ -1,3 +1,4 @@
+# Post failed production Hosting release: read-only audit of unchanged live revision and existing Cloudinary.
 name: VolunServe Original AI Live Release Marker Check (GET ONLY)
 on:
   push:
