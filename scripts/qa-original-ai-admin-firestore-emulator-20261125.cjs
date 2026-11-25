@@ -575,6 +575,22 @@ async function run() {
     assert.equal((await db.collection("users").doc(exhaustedUid).get()).data().identityVerified,false);
     pass("Three-attempt limit is enforced atomically BEFORE Python AI call or media upload");
 
+    // Teardown of the fabricated Resident-side image fixtures, before the
+    // pre-existing private evidence suite asserts its own independent media
+    // counts. All records exist only in the disposable Firebase emulator.
+    for(const uid of [blurryPreUid,fullUid]){
+      const snapshot=await faceMedia(uid).get();
+      if(snapshot.exists){
+        await destroyIdentityEvidence({
+          assets:snapshot.data().assets,cloudinary,configureCloudinary
+        });
+        await snapshot.ref.delete();
+        await faceStatus(uid).update({privateEvidenceRequestId:FieldValue.delete()});
+      }
+    }
+    assert.equal(evidenceStorage.size,0);
+    pass("Synthetic Resident media fixtures cleaned before independent Admin/evidence regression");
+
     const target="synthetic_case_main_20261125";
     await record(target);
     const route="/api/admin/identity/reviews/"+target+"/decision";
