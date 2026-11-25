@@ -991,56 +991,6 @@ export default function AdminCases() {
   }, [isAuthorized]);
 
 
-  useEffect(() => {
-    if (!isAuthorized) return;
-
-    return onSnapshot(
-      collection(db, "volunteerFieldReports"),
-      (snapshot) => {
-        const list: VolunteerFieldReport[] = snapshot.docs.map((item) => {
-          const data: any = item.data();
-
-          return {
-            id: item.id,
-            assignmentId: String(data.assignmentId || item.id),
-            caseId: String(data.caseId || ""),
-            volunteerId: String(data.volunteerId || ""),
-            volunteerName: String(data.volunteerName || "Volunteer"),
-            barangay: String(data.barangay || ""),
-            situationSummary: String(data.situationSummary || ""),
-            assistanceProvided: String(data.assistanceProvided || ""),
-            peopleHelped: Number(data.peopleHelped || 0),
-            remainingNeeds: normalizeStringArray(data.remainingNeeds),
-            remainingNeedsNote: String(data.remainingNeedsNote || ""),
-            lguFollowUpRequired: data.lguFollowUpRequired === true,
-            evidenceUrls: normalizeStringArray(data.evidenceUrls),
-            reportStatus: String(data.reportStatus || "submitted"),
-            adminReviewNote: String(data.adminReviewNote || ""),
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            reviewedAt: data.reviewedAt,
-            reviewedBy: String(data.reviewedBy || ""),
-          };
-        });
-
-        list.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || 0;
-          const bTime = b.createdAt?.toMillis?.() || 0;
-          // Within the same severity, serve the oldest waiting case first.
-      return aTime - bTime;
-        });
-
-        setFieldReports(list);
-      },
-      (error) => {
-        console.log("Volunteer field report listener error:", error);
-        Alert.alert(
-          "Permission Error",
-          "Unable to load Volunteer field reports. Check the deployed Firestore rules."
-        );
-      }
-    );
-  }, [isAuthorized]);
 
   useEffect(() => {
     if (!isAuthorized) return;
