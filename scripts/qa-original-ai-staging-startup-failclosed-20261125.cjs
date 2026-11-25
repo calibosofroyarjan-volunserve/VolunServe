@@ -20,12 +20,21 @@ const stageCloudinaryKey = "DUMMY-STAGING-API-KEY";
 const stageCloudinarySecret = "DUMMY-STAGING-API-SECRET";
 const productionCloudinaryKey = "DUMMY-PRODUCTION-API-KEY";
 const productionCloudinarySecret = "DUMMY-PRODUCTION-API-SECRET";
-const fakeServiceAccount = {project_id:"demo-safe-staging-project",private_key:"DUMMY-NO-REAL-CREDENTIAL"};
+const stagingFirebasePrivateKey = "DUMMY-STAGING-FIREBASE-PRIVATE-KEY-NOT-REAL";
+const productionFirebasePrivateKey = "DUMMY-PRODUCTION-FIREBASE-PRIVATE-KEY-NOT-REAL";
+const fakeServiceAccount = {
+  type:"service_account",
+  project_id:"demo-safe-staging-project",
+  client_email:"firebase-adminsdk-demo@demo-safe-staging-project.iam.gserviceaccount.com",
+  private_key:stagingFirebasePrivateKey
+};
 const baseEnv = {
   RENDER_SERVICE_NAME:"volunserve-backend-staging",
   VOLUNSERVE_DEPLOYMENT_ENV:"staging",
   VOLUNSERVE_STAGING_STRICT:"true",
   FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify(fakeServiceAccount),
+  VOLUNSERVE_STAGING_FIREBASE_PRIVATE_KEY_SHA256:sha(stagingFirebasePrivateKey),
+  VOLUNSERVE_PRODUCTION_FIREBASE_PRIVATE_KEY_SHA256:sha(productionFirebasePrivateKey),
   VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:fakeServiceAccount.project_id,
   IDENTITY_AI_SERVICE_URL:"https://volunserve-identity-ai-staging.onrender.com",
   VOLUNSERVE_STAGING_CLOUDINARY_CLOUD_NAME:"demo-isolated-cloud",
@@ -120,6 +129,40 @@ blocked("Staging service account pointing to production rejected",{
 });
 blocked("Staging Firebase project declaration mismatch rejected",{
   VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:"demo-other-project"
+});
+blocked("Staging Firebase account missing service_account type is rejected",{
+  FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({...fakeServiceAccount,type:""})
+});
+blocked("Staging Firebase account email from production project is rejected",{
+  FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({
+    ...fakeServiceAccount,client_email:"firebase-adminsdk-demo@volunserve-3aa5b.iam.gserviceaccount.com"
+  })
+});
+blocked("Staging Firebase account missing private key is rejected",{
+  FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({...fakeServiceAccount,private_key:""})
+});
+blocked("Missing staging Firebase private-key fingerprint is rejected",{
+  VOLUNSERVE_STAGING_FIREBASE_PRIVATE_KEY_SHA256:""
+});
+blocked("Missing production Firebase private-key fingerprint is rejected",{
+  VOLUNSERVE_PRODUCTION_FIREBASE_PRIVATE_KEY_SHA256:""
+});
+blocked("Malformed staging Firebase private-key fingerprint is rejected",{
+  VOLUNSERVE_STAGING_FIREBASE_PRIVATE_KEY_SHA256:"incorrect"
+});
+blocked("Staging Firebase private key differs from attested staging private key",{
+  FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({
+    ...fakeServiceAccount,private_key:"DUMMY-UNATTESTED-FIREBASE-PRIVATE-KEY"
+  })
+});
+blocked("Production Firebase private key relabelled as staging is rejected",{
+  FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({
+    ...fakeServiceAccount,private_key:productionFirebasePrivateKey
+  }),
+  VOLUNSERVE_STAGING_FIREBASE_PRIVATE_KEY_SHA256:sha(productionFirebasePrivateKey)
+});
+blocked("Identical staging and production Firebase private-key fingerprints are rejected",{
+  VOLUNSERVE_PRODUCTION_FIREBASE_PRIVATE_KEY_SHA256:sha(stagingFirebasePrivateKey)
 });
 blocked("Staging Node pointed at production Python rejected",{
   IDENTITY_AI_SERVICE_URL:"https://volunserve-identity-ai.onrender.com"
