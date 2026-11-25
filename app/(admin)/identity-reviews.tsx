@@ -38,7 +38,7 @@ type IdentityReview = {
   matchScore?: number | null;
   livenessScore?: number | null;
   documentScreening?: DocumentScreening;
-  reviewTrack?: "blurry_id_review" | "priority_admin_review" | "standard_admin_review" | "none";
+  reviewTrack?: "blurry_id_review" | "priority_admin_review" | "standard_admin_review" | "face_only_admin_review" | "none";
   message?: string;
   requiresManualReview?: boolean;
   evidenceAvailable?: boolean;
@@ -718,7 +718,13 @@ function ReviewDetail({
   const weakImage = blurry || idQuality === "low" || idQuality === "poor";
   const recognized = item.documentScreening?.status === "text_consistent_unverified" &&
     item.documentScreening?.declaredIdType === item.documentScreening?.detectedIdType;
-  const cannotApprove = blurry || !recognized ||
+  // Original face-only entries intentionally have NO OCR "recognized" marker.
+  // Only an Admin who independently attests the real National ID may approve.
+  const faceOnlyReview = item.verificationMethod === "volunserve_ai_face_only";
+  const eligibleFaceOnly = faceOnlyReview && nationalId &&
+    item.aiDecision === "verified" && item.evidenceAvailable === true;
+  const cannotApprove = blurry ||
+    (faceOnlyReview ? !eligibleFaceOnly : !recognized) ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
   const faceScore = typeof item.matchScore === "number" &&
     Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
@@ -735,10 +741,11 @@ function ReviewDetail({
     },
     {
       name:"Government ID type",
-      value:recognized ? declaredIdLabel + " (OCR consistent)" :
-        declaredIdLabel + " — not confirmed by OCR",
-      ok:recognized,
-      warning:!recognized,
+      value:faceOnlyReview ? "National ID portrait supplied; authenticity requires independent Admin check" :
+        recognized ? declaredIdLabel + " (OCR consistent)" :
+          declaredIdLabel + " — not confirmed by OCR",
+      ok:!faceOnlyReview && recognized,
+      warning:faceOnlyReview || !recognized,
     },
     {
       name:"Image quality",
@@ -1008,7 +1015,7 @@ function ReviewDetail({
               </View>
               {cannotApprove ? (
                 <Text style={styles.premiumDecisionHint}>
-                  This ID has not passed the required document screening. Request a corrected scan before approval.
+                  {faceOnlyReview ? "Face-only submission needs a positive comparison, retained private ID/selfie evidence and an independent government ID review before approval." : "This ID has not passed the required document screening. Request a corrected scan before approval."}
                 </Text>
               ) : null}
             </>
