@@ -4727,12 +4727,12 @@ async function callIdentityAiService(
   request,
   options = {},
 ) {
-  const endpoint =
-    options.faceOnly
-      ? getIdentityAiEndpoint().replace(/\/verify$/, "/verify-face-only")
-      : options.documentPrecheck
-        ? getIdentityAiEndpoint().replace(/\/verify$/, "/document/precheck")
-        : getIdentityAiEndpoint();
+  const configuredAiEndpoint = getIdentityAiEndpoint();
+  const endpoint = !configuredAiEndpoint ? "" : options.faceOnly
+    ? configuredAiEndpoint.replace(/\/verify$/, "/verify-face-only")
+    : options.documentPrecheck
+      ? configuredAiEndpoint.replace(/\/verify$/, "/document/precheck")
+      : configuredAiEndpoint;
   if (!endpoint) {
     const error =
       new Error(
@@ -6059,11 +6059,11 @@ app.post(
           const faceOnlyReview = verification.verificationMethod === "volunserve_ai_face_only";
           const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
           if (faceOnlyReview && (
-            verification.aiDecision !== "verified" || !verification.privateEvidenceRequestId ||
+            !["verified", "manual_review"].includes(verification.aiDecision) || !verification.privateEvidenceRequestId ||
             selectedIdCheck.declaredIdType !== "national_id"
           )) {
             throw makeHttpError(409, "face_only_independent_review_required",
-              "Original face-only verification needs a positive face comparison and retained consented ID/selfie for independent Admin review.");
+              "Original face-only verification requires an AI matching assessment and retained consented ID/selfie for independent Admin review.");
           }
           if (!faceOnlyReview && !selectedIdRecognized(selectedIdCheck)) {
             throw makeHttpError(
