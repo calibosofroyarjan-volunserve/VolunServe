@@ -9,6 +9,6 @@
     }
   },
   "firestore": {
-    "rules": "backend/qa-identity-firestore-emulator.rules"
+    "rules": "qa-identity-firestore-emulator.rules"
   }
 }
