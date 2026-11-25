@@ -1210,7 +1210,7 @@ export default function IdentityVerificationWeb() {
     setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("Checking the selected ID type, front/back arrangement and image quality...");
     try {
-      await checkIdentityEngineReady();
+      await checkIdentityEngineReady(FACE_ONLY_MODE);
       if (revision !== documentPrecheckRevisionRef.current) return;
       const result = await precheckIdentityDocument({
         idType, idDocument,
@@ -1329,7 +1329,7 @@ export default function IdentityVerificationWeb() {
       setSubmissionError("");
       // Check the separate Render Python engine before private images
       // are uploaded or a limited AI attempt is consumed.
-      await checkIdentityEngineReady();
+      await checkIdentityEngineReady(FACE_ONLY_MODE);
       setStep(3);
       requestStarted = true;
 
