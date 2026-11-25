@@ -85,6 +85,7 @@ function makeDb(lease=requestId,verified=false,userExists=true){
     identityPrivateEvidence:{},
     identityVerificationAttempts:{},
     identityAutomationEvents:{},
+    identityTrustedProofUses:{},
   };
   const writes=[];
   const db={
@@ -154,6 +155,12 @@ async function runScenario({
     uid,requestId,verificationId,screening:documentScreening,
     assets:newEvidenceAssets,aiDecision:decision,
   });
+  const proofReplayRefs=autoCompletion.eligible ? {
+    issuer:data.db.collection("identityTrustedProofUses")
+      .doc(autoCompletion.trustedProofReplayKeys.issuer),
+    pad:data.db.collection("identityTrustedProofUses")
+      .doc(autoCompletion.trustedProofReplayKeys.pad),
+  }:null;
   const FieldValue={
     serverTimestamp:()=>({syntheticTimestamp:true}),
     delete:()=>DELETE
@@ -166,7 +173,7 @@ async function runScenario({
     userSnapshot:null,verificationSnapshot:null,
     previousEvidenceAssets:null,
     uid,requestId,verificationId,newEvidenceAssets,
-    autoCompletion,automaticApproval,documentScreening,
+    autoCompletion,automaticApproval,documentScreening,proofReplayRefs,
     recognizedSelectedId:!badId,faceOnly,faceComparisonPassed:faceOnly,
     decision,reviewTrack:faceOnly?"face_only_admin_review":"standard_admin_review",
     matchScore:0.9,livenessScore:null,aiResult:{},
@@ -201,7 +208,8 @@ test("signed independent ID+PAD and validated face -> atomic Verified Resident +
   assert.equal(data.store.identityVerifications[uid].automaticVerificationApplied,true);
   assert.equal(data.store.identityVerificationAttempts[uid+"_"+requestId].status,"verified");
   assert.equal(data.store.identityAutomationEvents[uid+"_"+requestId].decision,"trusted_auto_verified");
-  assert.equal(data.writes.filter(x=>x.mode==="create").length,2);
+  assert.equal(data.writes.filter(x=>x.mode==="create").length,4);
+  assert.equal(Object.keys(data.store.identityTrustedProofUses).length,2);
 });
 test("default-off keeps signed full proof Pending and does not create auto-audit",async()=>{
   const {data,outcome}=await runScenario();
