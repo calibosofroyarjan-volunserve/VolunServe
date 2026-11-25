@@ -16,6 +16,10 @@ const {assertOriginalAiStagingIsolation} =
 const sha=x=>crypto.createHash("sha256").update(x).digest("hex");
 const stagingKey = "local-synthetic-original-ai-private-key-staging-20261125";
 const productionKey = "local-synthetic-original-ai-private-key-production-20261125";
+const stageCloudinaryKey = "DUMMY-STAGING-API-KEY";
+const stageCloudinarySecret = "DUMMY-STAGING-API-SECRET";
+const productionCloudinaryKey = "DUMMY-PRODUCTION-API-KEY";
+const productionCloudinarySecret = "DUMMY-PRODUCTION-API-SECRET";
 const fakeServiceAccount = {project_id:"demo-safe-staging-project",private_key:"DUMMY-NO-REAL-CREDENTIAL"};
 const baseEnv = {
   RENDER_SERVICE_NAME:"volunserve-backend-staging",
@@ -26,8 +30,12 @@ const baseEnv = {
   IDENTITY_AI_SERVICE_URL:"https://volunserve-identity-ai-staging.onrender.com",
   VOLUNSERVE_STAGING_CLOUDINARY_CLOUD_NAME:"demo-isolated-cloud",
   CLOUDINARY_CLOUD_NAME:"demo-isolated-cloud",
-  CLOUDINARY_API_KEY:"DUMMY-STAGING-API-KEY",
-  CLOUDINARY_API_SECRET:"DUMMY-STAGING-API-SECRET",
+  CLOUDINARY_API_KEY:stageCloudinaryKey,
+  CLOUDINARY_API_SECRET:stageCloudinarySecret,
+  VOLUNSERVE_STAGING_CLOUDINARY_API_KEY_SHA256:sha(stageCloudinaryKey),
+  VOLUNSERVE_PRODUCTION_CLOUDINARY_API_KEY_SHA256:sha(productionCloudinaryKey),
+  VOLUNSERVE_STAGING_CLOUDINARY_API_SECRET_SHA256:sha(stageCloudinarySecret),
+  VOLUNSERVE_PRODUCTION_CLOUDINARY_API_SECRET_SHA256:sha(productionCloudinarySecret),
   IDENTITY_AI_INTERNAL_KEY:stagingKey,
   VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256:sha(stagingKey),
   VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256:sha(productionKey)
@@ -126,6 +134,45 @@ blocked("Staging missing Cloudinary secret rejected",{
 blocked("Staging missing internal API key rejected",{
   IDENTITY_AI_INTERNAL_KEY:""
 });
+blocked("Missing staging Cloudinary API key fingerprint is rejected",{
+  VOLUNSERVE_STAGING_CLOUDINARY_API_KEY_SHA256:""
+});
+blocked("Missing production Cloudinary API key fingerprint is rejected",{
+  VOLUNSERVE_PRODUCTION_CLOUDINARY_API_KEY_SHA256:""
+});
+blocked("Missing staging Cloudinary API secret fingerprint is rejected",{
+  VOLUNSERVE_STAGING_CLOUDINARY_API_SECRET_SHA256:""
+});
+blocked("Missing production Cloudinary API secret fingerprint is rejected",{
+  VOLUNSERVE_PRODUCTION_CLOUDINARY_API_SECRET_SHA256:""
+});
+blocked("Invalid staging Cloudinary key fingerprint is rejected",{
+  VOLUNSERVE_STAGING_CLOUDINARY_API_KEY_SHA256:"not-a-sha256"
+});
+blocked("Invalid production Cloudinary secret fingerprint is rejected",{
+  VOLUNSERVE_PRODUCTION_CLOUDINARY_API_SECRET_SHA256:"0".repeat(10)
+});
+blocked("Staging Cloudinary API key does not match pinned staging fingerprint",{
+  CLOUDINARY_API_KEY:"DUMMY-KEY-NOT-MATCHING-APPROVED-STAGE-KEY"
+});
+blocked("Staging Cloudinary API secret does not match pinned staging fingerprint",{
+  CLOUDINARY_API_SECRET:"DUMMY-SECRET-NOT-MATCHING-APPROVED-STAGE-SECRET"
+});
+blocked("Cloudinary API key reused from production is denied even with stage cloud name",{
+  CLOUDINARY_API_KEY:productionCloudinaryKey,
+  VOLUNSERVE_STAGING_CLOUDINARY_API_KEY_SHA256:sha(productionCloudinaryKey)
+});
+blocked("Cloudinary API secret reused from production is denied even with stage cloud name",{
+  CLOUDINARY_API_SECRET:productionCloudinarySecret,
+  VOLUNSERVE_STAGING_CLOUDINARY_API_SECRET_SHA256:sha(productionCloudinarySecret)
+});
+blocked("Production Cloudinary key fingerprint equal to staging is denied",{
+  VOLUNSERVE_PRODUCTION_CLOUDINARY_API_KEY_SHA256:sha(stageCloudinaryKey)
+});
+blocked("Production Cloudinary secret fingerprint equal to staging is denied",{
+  VOLUNSERVE_PRODUCTION_CLOUDINARY_API_SECRET_SHA256:sha(stageCloudinarySecret)
+});
+
 blocked("Staging Cloudinary URL could override selected cloud and credentials",{
   CLOUDINARY_URL:"cloudinary://SYNTHETIC_KEY:SYNTHETIC_SECRET@netjawtz"
 });
