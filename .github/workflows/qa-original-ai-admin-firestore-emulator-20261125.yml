@@ -69,7 +69,7 @@ jobs:
               firestore:{host:'127.0.0.1',port:8080},
               ui:{enabled:false}
             },
-            firestore:{rules:'.qa-work/firestore.rules'}
+            firestore:{rules:'firestore.rules'}
           },null,2));
           fs.writeFileSync('.qa-work/firestore.rules',
             'rules_version = "2";\nservice cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if false; } } }\n');
