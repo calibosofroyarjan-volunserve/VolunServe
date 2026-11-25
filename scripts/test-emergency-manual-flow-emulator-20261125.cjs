@@ -93,10 +93,23 @@ async function main() {
       caseTitle:"Synthetic emergency QA",status:"offered",createdBy:ADMIN,
       createdAt:stamp(),updatedAt:stamp(),
     }));
+    // Mirror the real Admin manual-offer case patch. The native Resident map
+    // cannot subscribe to the assigned Volunteer's GPS without this exact ID.
     await assertSucceeds(updateDoc(incidentRef,{
       status:"assigned",assignedVolunteerIds:arrayUnion(VOLUNTEER),
-      assignedVolunteersCount:1,updatedAt:stamp(),
+      assignedVolunteersCount:1,
+      activeVolunteerSupportUid:VOLUNTEER,
+      activeVolunteerSupportName:"Synthetic Volunteer",
+      activeVolunteerSupportAssignmentId:OFFER,
+      assignedAt:stamp(),updatedAt:stamp(),
     }));
+    const residentCase = (await assertSucceeds(getDoc(
+      doc(resident,"disasterCases",CASE)
+    ))).data();
+    assert.equal(residentCase.reporterUid,RESIDENT);
+    assert.equal(residentCase.activeVolunteerSupportUid,VOLUNTEER);
+    assert.equal(residentCase.activeVolunteerSupportAssignmentId,OFFER);
+    await assertFails(getDoc(doc(outsider,"disasterCases",CASE)));
 
     const own = query(collection(volunteer,"responseAssignments"),where("volunteerId","==",VOLUNTEER));
     assert.equal((await assertSucceeds(getDocs(own))).size,1);
