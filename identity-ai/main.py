@@ -1681,6 +1681,7 @@ async def document_precheck(
             "livenessVerified": False}
 
 
+@app.post("/verify-face-only")  # Original 2026-10-23 National-ID portrait vs selfie; NO OCR.
 @app.post(
     "/verify"
 )
@@ -1754,6 +1755,11 @@ async def verify_identity(
                 "Select a supported government ID type."
             ),
         )
+    # Face-only is an additive, separately routed legacy mode. The original
+    # /verify still requires supported ID OCR and front/back screening.
+    face_only = request.url.path == "/verify-face-only"
+    if face_only and id_type != "national_id":
+        raise HTTPException(status_code=400, detail="Face-only flow accepts National ID portrait only.")
     id_upload = form.get(
         "idDocument"
     )
@@ -1761,7 +1767,7 @@ async def verify_identity(
         "selfie"
     )
     back_upload = form.get("idBackDocument")
-    if id_type != "passport" and not isinstance(
+    if not face_only and id_type != "passport" and not isinstance(
         back_upload, StarletteUploadFile
     ):
         raise HTTPException(
@@ -1844,9 +1850,41 @@ async def verify_identity(
                 "deploy the compatible MediaPipe build."
             ),
         )
+    if face_only:
+        # Exact original face-only core: 1:1 ID portrait vs freshly captured
+        # selfie. No OCR, printed name, birthday or government issuance checks.
+        # This outcome is PRELIMINARY and NEVER independently grants resident
+        # privileges; the Node Admin reviewer must validate the actual ID.
+        try:
+            result = await asyncio.to_thread(
+                run_face_verification,
+                uid=uid,
+                id_document_bytes=id_document_bytes,
+                selfie_bytes=selfie_bytes,
+            )
+        except HTTPException:
+            raise
+        except Exception:
+            logging.exception("Face-only comparison engine error")
+            raise HTTPException(
+                status_code=500,
+                detail="The face-only AI comparison could not complete.",
+            ) from None
+        return {
+            **result,
+            "idType": "national_id",
+            "faceOnly": True,
+            "documentScreening": {
+                "declaredIdType": "national_id",
+                "detectedIdType": None,
+                "status": "inconclusive",
+                "authenticityVerified": False,
+                "manualReviewRequired": True,
+                "warningCodes": [],
+            },
+        }
     try:
-        # Both the profile's Be a Verified Resident flow and the LGU review
-        # queue use this one protected endpoint; no separate visual-only AI.
+        # Existing OCR-screened verification route remains unchanged.
         # First check ONLY the government ID type the user selected.
         # Never run face matching if the document is unrecognized, a school
         # ID or a different government ID. Fail closed and allow a retry.
