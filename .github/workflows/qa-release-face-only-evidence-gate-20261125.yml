@@ -1,0 +1,120 @@
+name: Original AI Face-Only Backend Release Preflight (NO DEPLOY)
+on:
+  push:
+    branches: [release/identity-face-only-evidence-guard-nodeonly-20261125]
+    paths: [.github/workflows/qa-release-face-only-evidence-gate-20261125.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pinned-backend-release-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Release scope and exact successful QA candidate pin
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const deployed='d3308da6107f517061f5022997a229de9d05a0cb';
+          const qaGreen='419cf71781483260699299db5c02f94e3f83848a';
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          cp.execFileSync('git',['merge-base','--is-ancestor',deployed,'HEAD']);
+          cp.execFileSync('git',['merge-base','--is-ancestor',qaGreen,'HEAD']);
+          cp.execFileSync('git',['diff','--check',deployed,'HEAD']);
+          const allowed=[
+            '.github/workflows/qa-face-only-private-evidence-approval-20261125.yml',
+            '.github/workflows/qa-release-face-only-evidence-gate-20261125.yml',
+            'backend/identityFaceOnlyReviewEvidence.js',
+            'backend/server.js',
+            'backend/test-identity-three-attempt-review.js',
+            'backend/tests/identityFaceOnlyReviewEvidence.test.js',
+            'backend/tests/identityFaceOnlyRouteSyntheticIntegration.test.js'
+          ].sort();
+          assert.deepEqual(git('diff','--name-only',deployed,'HEAD').split('\n').sort(),allowed,
+            'Release includes unreviewed changes outside the original face-only evidence guard');
+          assert.deepEqual(
+            git('diff','--name-only',qaGreen,'HEAD').split('\n'),
+            ['.github/workflows/qa-release-face-only-evidence-gate-20261125.yml'],
+            'Runtime files are not byte-for-byte equal to QA-green snapshot');
+          for(const file of [
+            'backend/server.js','backend/identityFaceOnlyReviewEvidence.js',
+            'backend/test-identity-three-attempt-review.js',
+            'backend/tests/identityFaceOnlyReviewEvidence.test.js',
+            'backend/tests/identityFaceOnlyRouteSyntheticIntegration.test.js'
+          ]){
+            assert.equal(git('rev-parse','HEAD:'+file),git('rev-parse',qaGreen+':'+file),
+              'Unexpected file change: '+file);
+          }
+          console.log('PASS: candidate includes only validated Node Admin guard, helper and tests; no Python or Firebase rules modified');
+          JS
+      - name: Verify syntax and all targeted synthetic Admin integration regressions
+        run: |
+          set -eu
+          node --check backend/server.js
+          node --check backend/identityFaceOnlyReviewEvidence.js
+          node --test backend/tests/identityFaceOnlyReviewEvidence.test.js
+          node --test backend/tests/identityFaceOnlyRouteSyntheticIntegration.test.js
+          node --test backend/test-identityPrivateEvidence.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-review-reject.js
+          node --test backend/test-identity-three-attempt-review.js
+          node --test backend/test-identityIssuerReviewPolicy.js
+      - name: Smoke existing unrelated certificates, attendance and signup guards
+        run: |
+          set -eu
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          node --test backend/test-identityAiReadiness.js
+          node --test backend/tests/verifiedFirebaseToken.test.js
+          node backend/test-communityCertificateAutoSync.js
+          node --test backend/test-communityAttendanceAutoVerify.js
+          node --test backend/test-communityCertificateEligibility.js
+          node --test backend/test-communityCertificateIssuance.js
+      - name: Read-only public identity health/anonymous-denial audit
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const cases=[
+            ['node_health','https://volunserve.onrender.com/health',200],
+            ['python_health','https://volunserve-identity-ai.onrender.com/health',200],
+            ['admin_queue_anonymous','https://volunserve.onrender.com/api/admin/identity/reviews',401],
+            ['admin_evidence_anonymous','https://volunserve.onrender.com/api/admin/identity/reviews/syntheticResident123/evidence',401],
+            ['admin_decision_GET_anonymous','https://volunserve.onrender.com/api/admin/identity/reviews/syntheticResident123/decision',404],
+            ['resident_status_anonymous','https://volunserve.onrender.com/api/identity/status',401]
+          ];
+          const hosts=new Set(['volunserve.onrender.com','volunserve-identity-ai.onrender.com']);
+          async function probe(name,url,expected){
+            const target=new URL(url);
+            assert.equal(target.protocol,'https:');assert(hosts.has(target.hostname));
+            let err;
+            for(let attempt=0;attempt<3;attempt++){
+              try{
+                const resp=await fetch(url,{method:'GET',redirect:'error',
+                  signal:AbortSignal.timeout(65000)});
+                assert.equal(resp.status,expected,'Expected status for '+name);
+                console.log('GET_ONLY',name,resp.status);
+                if(name.endsWith('health')){
+                  const body=await resp.json();
+                  assert.equal(body.ok,true);
+                }
+                return;
+              }catch(e){err=e;if(attempt<2)await new Promise(resolve=>setTimeout(resolve,4000));}
+            }
+            throw new Error('READ_ONLY_PRECHECK_BLOCKED '+name+': '+err.message);
+          }
+          (async()=>{
+            for(const c of cases)await probe(...c);
+            console.log('PUBLIC GET-only audit: no credentials, uploads, account actions or deployment');
+            console.log('FINAL RELEASE STILL BLOCKED pending independently verified Render service branch, rollback path and isolated Firebase/Cloudinary E2E');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          JS
+# This workflow neither deploys nor uses Firebase/Cloudinary credentials.
+# It does not authorize production release or claim real human face accuracy.
