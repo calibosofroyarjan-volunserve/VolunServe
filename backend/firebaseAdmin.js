@@ -10,6 +10,7 @@ const {
 const {
   getAuth,
 } = require("firebase-admin/auth");
+const { assertOriginalAiStagingIsolation } = require("./stagingOriginalAiIsolationPolicy");
 
 const {
   getFirestore,
@@ -56,11 +57,31 @@ function getFirebaseApp() {
     getApps();
 
   if (existingApps.length > 0) {
+    // Preserve existing production behavior. On staging only, refuse
+    // an already-created Firebase app if isolation is unconfirmed.
+    const env = process.env;
+    if (/staging/i.test(String(env.RENDER_SERVICE_NAME || "")) ||
+        String(env.VOLUNSERVE_DEPLOYMENT_ENV || "").toLowerCase() === "staging" ||
+        String(env.VOLUNSERVE_STAGING_STRICT || "").toLowerCase() === "true") {
+      const expectedAccount = getServiceAccount();
+      assertOriginalAiStagingIsolation(env, expectedAccount);
+      // An SDK app initialized before this module must not silently reuse
+      // a production credential. If its project is unknown, fail closed.
+      const actualProject = String(existingApps[0]?.options?.projectId || "").trim();
+      if (!actualProject || actualProject !== expectedAccount?.project_id) {
+        throw new Error(
+          "Original AI staging isolation blocked: existing Firebase app project cannot be independently verified.",
+        );
+      }
+    }
     return existingApps[0];
   }
 
   const serviceAccount =
     getServiceAccount();
+  // Staging must fail before any Firebase network client is initialized.
+  // No changes to approved production role/account data or Firebase rules.
+  assertOriginalAiStagingIsolation(process.env, serviceAccount);
 
   if (serviceAccount) {
     return initializeApp({
