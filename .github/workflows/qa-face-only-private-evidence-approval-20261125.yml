@@ -1,0 +1,77 @@
+name: Face-Only Admin Private Evidence Expiry Guard (NO DEPLOY)
+on:
+  push:
+    branches: [qa/identity-face-only-evidence-expiry-20261125]
+    paths:
+      - backend/server.js
+      - backend/identityFaceOnlyReviewEvidence.js
+      - backend/tests/identityFaceOnlyReviewEvidence.test.js
+      - .github/workflows/qa-face-only-private-evidence-approval-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-identity-approval-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify baseline is deployed Node and strict four-file scope
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='d3308da6107f517061f5022997a229de9d05a0cb';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          cp.execFileSync('git',['diff','--check',base,'HEAD']);
+          const changed=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-face-only-private-evidence-approval-20261125.yml',
+            'backend/identityFaceOnlyReviewEvidence.js',
+            'backend/server.js',
+            'backend/tests/identityFaceOnlyReviewEvidence.test.js'
+          ].sort(),'No unrelated backend, rules, Cloudinary, events, donations, emergency, or frontend changes');
+          console.log('PASS: exact deployed Node baseline and only three guarded backend test/source files');
+          JS
+      - name: Syntax-check server, private evidence guard and isolated tests
+        run: |
+          node --check backend/server.js
+          node --check backend/identityFaceOnlyReviewEvidence.js
+          node --check backend/tests/identityFaceOnlyReviewEvidence.test.js
+      - name: Execute positive, expired, missing, mismatched, public and cross-user synthetic checks
+        run: |
+          node --test backend/tests/identityFaceOnlyReviewEvidence.test.js
+          echo "PASS: synthetic metadata checks only, no production credentials, no real faces, no uploads or Admin decisions"
+      - name: Verify runtime code never automatically upgrades Resident after face comparison
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const server=fs.readFileSync('backend/server.js','utf8');
+          const helper=fs.readFileSync('backend/identityFaceOnlyReviewEvidence.js','utf8');
+          const required=[
+            'requireFirebaseUser,\n  requireOperationalAdmin',
+            'self_identity_review_forbidden',
+            'face_only_independent_review_required',
+            'face_only_evidence_unavailable',
+            'reviewIssuerEvidence({',
+            'identityVerified: false,',
+            'transaction.get(evidenceRef)',
+            'currentEvidence.ok',
+            'verification.privateEvidenceRequestId',
+            'evidence.retentionUntil',
+            'consented_manual_identity_review'
+          ];
+          for(const text of required)
+            assert(server.includes(text)||helper.includes(text),'Missing fail-closed contract '+text);
+          const body=server.slice(server.indexOf('"/api/admin/identity/reviews/:uid/decision"'),
+             server.indexOf('app.post(\n  "/api/admin/assistance/requests',server.indexOf('"/api/admin/identity/reviews/:uid/decision"')));
+          assert(body.includes('if (action === "verify") {'));
+          assert(body.includes('validateFaceOnlyReviewEvidence({'));
+          console.log('PASS: only authenticated, authorized, manually validated Admin decision may grant Verified');
+          JS
+# This workflow cannot deploy and never writes to Firebase or calls Cloudinary.
