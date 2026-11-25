@@ -51,6 +51,8 @@ jobs:
             const expected=[
               '.github/workflows/qa-original-ai-failclosed-verified-status-20261125.yml',
               '.github/workflows/qa-original-ai-safe-release-gate-20261125.yml',
+              '.github/workflows/qa-original-ai-node-python-auth-handshake-20261125.yml',
+              'scripts/qa-original-ai-node-python-auth-handshake-20261125.cjs',
               '.github/workflows/qa-original-ai-staging-provider-preflight-20261125.yml',
               'backend/firebaseAdmin.js',
               'backend/server.js',
