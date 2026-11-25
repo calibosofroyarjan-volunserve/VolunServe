@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -30,6 +31,7 @@ import {
 import MapView, { Marker, Callout, Polyline, Polygon } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../lib/firebase";
+import { emergencyArrivalAssessment } from "../../lib/emergencyArrival";
 import { isVerifiedActiveCenter, isRecentShelterReport, vehicleInfo } from "../../lib/emergencyMapTypes";
 import { SJDM_FOCUS, SJDM_MASK_EXTERIOR, sjdmOutsideMask, sjdmSafeCenter, routeStaysInSjdm, boundaryRings, boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, type SjdmBoundary } from "../../lib/sjdmMapBoundary";
 import { LGU_FACILITY_ICONS, verifiedLguMapFacility, type LguMapFacility } from "../../lib/lguMapFacilities";
@@ -45,6 +47,8 @@ import {
 type UserLocation = {
   latitude: number;
   longitude: number;
+  accuracy?: number | null;
+  timestamp?: number;
 };
 
 type IncidentSeverity = "low" | "medium" | "high" | "critical";
@@ -56,6 +60,12 @@ type IncidentStatus =
   | "resolved"
   | "closed";
 type VolunteerStatus = "available" | "responding" | "offline";
+
+type ActiveEmergencyTask = {
+  id: string;
+  caseId: string;
+  status: "responding" | "on_site";
+};
 
 type Incident = {
   id: string;
@@ -70,9 +80,20 @@ type Incident = {
   assignedVolunteerName?: string;
   responseVehicleType?: string;
   activeLguResponderUid?: string;
+  activeVolunteerSupportAssignmentId?: string;
   distanceKm?: number;
   etaMinutes?: number;
   createdAt?: any;
+};
+
+type ResidentVolunteerGps = {
+  caseId: string;
+  assignmentId: string;
+  volunteerId: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  updatedAt?: { toMillis?: () => number };
 };
 
 type RealLguGps = {
@@ -140,10 +161,19 @@ export default function MapTracking() {
     user?.displayName ?? user?.email ?? "Resident User";
 
   const [userRole, setUserRole] = useState<"resident" | "volunteer">("resident");
+  const [activeEmergencyTask, setActiveEmergencyTask] = useState<ActiveEmergencyTask | null>(null);
+  const activeEmergencyTaskRef = useRef<ActiveEmergencyTask | null>(null);
+  const lastEmergencyGpsSyncRef = useRef(0);
 
   const [location, setLocation] = useState<UserLocation | null>(null);
+
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const focusedIncident = focusedCaseId ? incidents.find(item => item.id === focusedCaseId) : null;
+  const arrival = emergencyArrivalAssessment(
+    location,
+    focusedIncident ? { latitude: focusedIncident.latitude, longitude: focusedIncident.longitude } : null,
+  );
+
   const [centers, setCenters] = useState<EvacuationCenter[]>([]);
   const [lguFacilities, setLguFacilities] = useState<LguMapFacility[]>([]);
   const [sjdmBoundary, setSjdmBoundary] = useState<SjdmBoundary | null>(null);
@@ -174,6 +204,9 @@ export default function MapTracking() {
     return result.slice(0,100);
   }, [sjdmBoundary,lguFacilities]);
   const [liveLguPins, setLiveLguPins] = useState<Record<string, RealLguGps>>({});
+  const [residentVolunteerGps, setResidentVolunteerGps] = useState<ResidentVolunteerGps | null>(null);
+  const [residentVolunteerGpsError, setResidentVolunteerGpsError] = useState(false);
+  const [emergencyGpsPublishError, setEmergencyGpsPublishError] = useState(false);
   const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -259,6 +292,115 @@ export default function MapTracking() {
       });
   }, [CURRENT_USER_ID]);
 
+
+  // Read only the current Volunteer's assignments. Case GPS is published only
+  // while a focused, accepted task is actually Responding or On Site.
+  // A completed/declined/cancelled task is never treated as live.
+  useEffect(() => {
+    activeEmergencyTaskRef.current = null;
+    setActiveEmergencyTask(null);
+    if (!CURRENT_USER_ID || userRole !== "volunteer" || !focusedCaseId) return;
+
+    const assignmentsQuery = query(
+      collection(db, "responseAssignments"),
+      where("volunteerId", "==", CURRENT_USER_ID),
+    );
+    return onSnapshot(assignmentsQuery, (snapshot) => {
+      const next = snapshot.docs
+        .map(item => ({ id: item.id, ...item.data() } as ActiveEmergencyTask))
+        .find(item => item.caseId === focusedCaseId &&
+          ["responding", "on_site"].includes(String(item.status))) || null;
+      const previousTask = activeEmergencyTaskRef.current;
+      activeEmergencyTaskRef.current = next;
+      setActiveEmergencyTask(next);
+      if (previousTask && !next) {
+        // Best-effort cleanup; map readers independently hide stale and
+        // no-longer-active assignment locations.
+        void deleteDoc(doc(db, "responseLocations", CURRENT_USER_ID)).catch(() => {});
+      }
+    }, () => {
+      activeEmergencyTaskRef.current = null;
+      setActiveEmergencyTask(null);
+      setLocationError("Could not verify the active Volunteer response assignment.");
+    });
+  }, [CURRENT_USER_ID, userRole, focusedCaseId]);
+
+  // Resident sees only GPS of the selected case's actual assigned Volunteer.
+  // Never subscribe to all responseLocations or expose unrelated Volunteer GPS.
+  const trackedVolunteerCase = userRole === "resident" &&
+    focusedIncident?.reportedBy === CURRENT_USER_ID &&
+    ["assigned", "in_progress"].includes(focusedIncident?.status ?? "")
+    ? focusedIncident : null;
+  const trackedVolunteerAssignmentId =
+    trackedVolunteerCase?.activeVolunteerSupportAssignmentId ?? "";
+
+  useEffect(() => {
+    setResidentVolunteerGps(null);
+    setResidentVolunteerGpsError(false);
+    if (!CURRENT_USER_ID || userRole !== "resident" ||
+        !focusedCaseId || !trackedVolunteerAssignmentId) return;
+
+    let unsubscribeGps: (() => void) | null = null;
+    const clearGps = () => {
+      unsubscribeGps?.();
+      unsubscribeGps = null;
+      setResidentVolunteerGps(null);
+    };
+    const stopAssignment = onSnapshot(
+      doc(db, "responseAssignments", trackedVolunteerAssignmentId),
+      assignmentSnapshot => {
+        clearGps();
+        setResidentVolunteerGpsError(false);
+        if (!assignmentSnapshot.exists()) return;
+        const assignment = assignmentSnapshot.data();
+        if (assignment.caseId !== focusedCaseId ||
+            !["responding", "on_site"].includes(String(assignment.status)) ||
+            typeof assignment.volunteerId !== "string" ||
+            !assignment.volunteerId) return;
+
+        const volunteerUid = assignment.volunteerId;
+        unsubscribeGps = onSnapshot(
+          doc(db, "responseLocations", volunteerUid),
+          gpsSnapshot => {
+            if (!gpsSnapshot.exists()) {
+              setResidentVolunteerGps(null);
+              return;
+            }
+            const gps = gpsSnapshot.data();
+            const latitude = Number(gps.latitude);
+            const longitude = Number(gps.longitude);
+            const valid = gps.caseId === focusedCaseId &&
+              gps.assignmentId === trackedVolunteerAssignmentId &&
+              gps.volunteerId === volunteerUid &&
+              Number.isFinite(latitude) && Number.isFinite(longitude) &&
+              Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 &&
+              typeof gps.updatedAt?.toMillis === "function";
+            setResidentVolunteerGps(valid ? {
+              caseId: focusedCaseId,
+              assignmentId: trackedVolunteerAssignmentId,
+              volunteerId: volunteerUid,
+              latitude,
+              longitude,
+              accuracy: typeof gps.accuracy === "number" ? gps.accuracy : null,
+              updatedAt: gps.updatedAt,
+            } : null);
+          },
+          () => {
+            setResidentVolunteerGps(null);
+            setResidentVolunteerGpsError(true);
+          },
+        );
+      },
+      () => {
+        clearGps();
+        setResidentVolunteerGpsError(true);
+      },
+    );
+    return () => {
+      stopAssignment();
+      clearGps();
+    };
+  }, [CURRENT_USER_ID, userRole, focusedCaseId, trackedVolunteerAssignmentId]);
 
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const lastSyncRef = useRef(0);
@@ -454,6 +596,18 @@ export default function MapTracking() {
     return [{ ...point, vehicle: vehicleInfo(incident.responseVehicleType) }];
   });
 
+  const visibleResidentVolunteerGps = (() => {
+    const point = residentVolunteerGps;
+    if (!trackedVolunteerCase || !point ||
+        point.caseId !== trackedVolunteerCase.id ||
+        point.assignmentId !== trackedVolunteerAssignmentId) return null;
+    const lastUpdate = point.updatedAt?.toMillis?.() ?? 0;
+    if (!lastUpdate || lastUpdate > gpsClock + 10_000 ||
+        gpsClock - lastUpdate > 120_000 ||
+        !inCity(point.latitude, point.longitude)) return null;
+    return { ...point, lastUpdate };
+  })();
+
   const nearestCenter = useMemo(() => {
     if (!location || !inCity(location.latitude, location.longitude) || centers.length === 0) return null;
 
@@ -619,6 +773,14 @@ export default function MapTracking() {
       }
 
       watchingRef.current = false;
+      // This map owns only foreground, case-specific Volunteer GPS sharing.
+      // Best-effort revoke the pin when the map is closed; readers also
+      // enforce task status and freshness in case the device is offline.
+      const activeTask = activeEmergencyTaskRef.current;
+      activeEmergencyTaskRef.current = null;
+      if (activeTask && CURRENT_USER_ID) {
+        void deleteDoc(doc(db, "responseLocations", CURRENT_USER_ID)).catch(() => {});
+      }
 
       firestoreUnsubscribersRef.current.forEach((unsubscribe) => {
         try {
@@ -773,6 +935,8 @@ export default function MapTracking() {
           initialLocation = {
             latitude: lastKnown.coords.latitude,
             longitude: lastKnown.coords.longitude,
+            accuracy: lastKnown.coords.accuracy,
+            timestamp: lastKnown.timestamp,
           };
 
           setLocation(initialLocation);
@@ -789,6 +953,8 @@ export default function MapTracking() {
         initialLocation = {
           latitude: current.coords.latitude,
           longitude: current.coords.longitude,
+          accuracy: current.coords.accuracy,
+          timestamp: current.timestamp,
         };
 
         setLocation(initialLocation);
@@ -841,6 +1007,8 @@ export default function MapTracking() {
           const updatedLoc = {
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            timestamp: pos.timestamp,
           };
 
           setLocation(updatedLoc);
@@ -882,6 +1050,31 @@ export default function MapTracking() {
       const role = userRoleRef.current;
 
       if (role === "volunteer") {
+        const responseTask = activeEmergencyTaskRef.current;
+        if (responseTask && CURRENT_USER_ID) {
+          const now = Date.now();
+          if (now - lastEmergencyGpsSyncRef.current >= 10000 &&
+            Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude) &&
+            (!coords.timestamp || now - coords.timestamp <= 30000)) {
+            lastEmergencyGpsSyncRef.current = now;
+            try {
+              await setDoc(doc(db, "responseLocations", CURRENT_USER_ID), {
+                volunteerId: CURRENT_USER_ID,
+                assignmentId: responseTask.id,
+                caseId: responseTask.caseId,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                accuracy: typeof coords.accuracy === "number" ? coords.accuracy : null,
+                updatedAt: serverTimestamp(),
+              });
+              setEmergencyGpsPublishError(false);
+            } catch (error) {
+              setEmergencyGpsPublishError(true);
+              console.log("Case-specific Volunteer GPS publish error:", error);
+              // Keep the last-known map position; never invent live tracking.
+            }
+          }
+        }
         const volunteerRef = doc(
           db,
           "volunteers_live_locations",
@@ -958,6 +1151,8 @@ export default function MapTracking() {
               assignedVolunteerName: raw.assignedVolunteerName ?? "",
               responseVehicleType: raw.responseVehicleType ?? "",
               activeLguResponderUid: raw.activeLguResponderUid ?? "",
+              activeVolunteerSupportAssignmentId:
+                String(raw.activeVolunteerSupportAssignmentId ?? ""),
               distanceKm: Number(raw.distanceKm ?? 0),
               etaMinutes: Number(raw.etaMinutes ?? 0),
               createdAt: raw.createdAt,
@@ -1360,6 +1555,70 @@ export default function MapTracking() {
         </View>
       </SafeAreaView>
 
+      {userRole === "volunteer" && focusedCaseId && activeEmergencyTask && (
+        <View style={{paddingHorizontal:16,paddingVertical:10,backgroundColor:"#EFF8F3"}}>
+          <Text style={{fontSize:13,fontWeight:"700",color:"#14532D"}}>
+            {arrival.status === "near"
+              ? "Near destination (approximately 100 m). Tap Mark On Site in Volunteer Tasks once you have actually arrived."
+              : arrival.status === "en_route" && arrival.distanceMeters != null
+                ? `GPS distance to saved incident: about ${Math.round(arrival.distanceMeters)} m (straight line)`
+                : arrival.status === "stale"
+                  ? "GPS reading is outdated. Arrival not confirmed."
+                  : arrival.status === "low_accuracy"
+                    ? "GPS accuracy too low for the 100 m indicator. Confirm arrival manually."
+                    : "Waiting for a fresh GPS reading and valid incident pin."}
+          </Text>
+          {emergencyGpsPublishError && (
+            <Text style={{fontSize:11,color:"#B91C1C",marginTop:4}}>
+              Volunteer GPS could not be shared. Check network or deployed Firestore permissions; the Resident may not see this location.
+            </Text>
+          )}
+          <Text style={{fontSize:11,color:"#47675C",marginTop:3}}>
+            Proximity is informational only, not proof that assistance was delivered. Resident confirms help separately.
+          </Text>
+        </View>
+      )}
+
+      {userRole === "resident" && trackedVolunteerCase &&
+        !!trackedVolunteerAssignmentId && (
+        <View style={{paddingHorizontal:16,paddingVertical:9,backgroundColor:"#EFF8F3"}}>
+          <Text style={{fontSize:12,fontWeight:"700",color:"#14532D"}}>
+            {visibleResidentVolunteerGps
+              ? `Assigned Volunteer GPS · updated ${new Date(visibleResidentVolunteerGps.lastUpdate).toLocaleTimeString("en-PH")}`
+              : residentVolunteerGpsError
+                ? "Assigned Volunteer GPS unavailable. Check connection or Firestore permissions."
+                : "Waiting for the assigned Volunteer's active, recent GPS location"}
+          </Text>
+          <Text style={{fontSize:11,color:"#47675C",marginTop:3}}>
+            Only Responding/On Site locations are shared. Pin is last reported GPS, not verified arrival or guaranteed road ETA.
+          </Text>
+          {visibleResidentVolunteerGps && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Locate assigned Volunteer on emergency map"
+              onPress={() => {
+                followUserRef.current = false;
+                mapRef.current?.animateCamera({
+                  center: {
+                    latitude: visibleResidentVolunteerGps.latitude,
+                    longitude: visibleResidentVolunteerGps.longitude,
+                  },
+                  zoom: 15,
+                  pitch: 0,
+                  heading: 0,
+                }, {duration: 450});
+              }}
+              style={{marginTop:7,alignSelf:"flex-start",backgroundColor:"#0D956F",
+                borderRadius:8,paddingVertical:7,paddingHorizontal:12}}
+            >
+              <Text style={{color:"#FFFFFF",fontSize:12,fontWeight:"700"}}>
+                Locate Assigned Volunteer
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {/* =====================================================
           MAP
       ===================================================== */}
@@ -1504,6 +1763,48 @@ export default function MapTracking() {
               />
             </Marker>
           ))}
+
+          {/* Private, case-specific GPS pin: never infer emergency response
+              position from public Volunteer presence data. */}
+          {userRole === "resident" && visibleResidentVolunteerGps && (
+            <Marker
+              key={"assigned-volunteer-" + visibleResidentVolunteerGps.assignmentId}
+              coordinate={{
+                latitude: visibleResidentVolunteerGps.latitude,
+                longitude: visibleResidentVolunteerGps.longitude,
+              }}
+              title="Assigned Volunteer · live GPS"
+              description={
+                "Last reported " +
+                new Date(visibleResidentVolunteerGps.lastUpdate).toLocaleTimeString("en-PH") +
+                (visibleResidentVolunteerGps.accuracy != null
+                  ? " · GPS ±" + Math.round(visibleResidentVolunteerGps.accuracy) + " m"
+                  : "")
+              }
+            >
+              <MapPin color="#0D956F" icon="navigate-circle" />
+            </Marker>
+          )}
+
+          {/* Straight-line guide only, NOT a Google Maps road route or ETA. */}
+          {userRole === "resident" && visibleResidentVolunteerGps &&
+            trackedVolunteerCase && validCityRoute([
+              {latitude:visibleResidentVolunteerGps.latitude,
+               longitude:visibleResidentVolunteerGps.longitude},
+              {latitude:trackedVolunteerCase.latitude,
+               longitude:trackedVolunteerCase.longitude},
+            ]) && (
+            <Polyline
+              coordinates={[
+                {latitude:visibleResidentVolunteerGps.latitude,
+                 longitude:visibleResidentVolunteerGps.longitude},
+                {latitude:trackedVolunteerCase.latitude,
+                 longitude:trackedVolunteerCase.longitude},
+              ]}
+              strokeWidth={3}
+              strokeColor="#0D956F"
+            />
+          )}
 
           {/* Real assigned LGU GPS only: icon identifies actual dispatched vehicle.
               No icon appears without a fresh authorized GPS reading. */}
