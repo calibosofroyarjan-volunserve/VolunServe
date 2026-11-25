@@ -40,6 +40,8 @@ const {isVerifiedFirebaseToken,isCompletedVolunServeProfile} =
   require("./backend/verifiedFirebaseToken");
 const {isOperationalAdminProfile} = require("./backend/adminAccess");
 const {selectedIdRecognized} = require("./backend/selectedIdPolicy");
+const {probeIdentityAiReadiness: liveProbeIdentityAiReadiness} =
+  require("./backend/identityAiReadiness");
 const {reviewIssuerEvidence} = require("./backend/identityIssuerReviewPolicy");
 const {
   parseConsentedIdentityEvidence,uploadIdentityEvidence,
@@ -95,6 +97,47 @@ const cloudinary={
 function configureCloudinary(){ /* Fake only, no real service or credentials. */ }
 const app = express();
 app.disable("x-powered-by");
+
+// The actual pinned deployed Node /api/identity/engine-health route is
+// exercised below, but all outbound Python AI GETs are intercepted in RAM.
+// Never contact Render, nor use production Firebase/Cloudinary secrets.
+const LOCAL_AI_ENDPOINT="http://127.0.0.1:18761/verify";
+const LOCAL_AI_KEY="synthetic-qa-only-private-key-not-a-secret-20261125";
+const readyAiHealth={
+  ok:true,
+  internalAuthConfigured:true,
+  verificationEngineReady:true,
+  documentOcrReady:true,
+  profileComparisonReady:true,
+  documentPrecheckReady:true,
+  livenessImplemented:false
+};
+let aiScenario={health:{...readyAiHealth},authStatus:200,authBody:{authenticated:true}};
+let syntheticOutboundCalls=[];
+function aiResponse(status,body){
+  return {ok:status>=200&&status<300,status,async json(){return body;}};
+}
+async function interceptPythonAiGet(url,options){
+  assert.equal(options?.method,"GET","AI readiness must never POST /verify");
+  assert.ok(url.startsWith("http://127.0.0.1:18761/"),"Non-loopback AI request forbidden");
+  assert.ok(url.endsWith("/health")||url.endsWith("/api/internal/auth-check"),
+    "Only private GET probes may run");
+  syntheticOutboundCalls.push({path:new URL(url).pathname,method:options.method});
+  if(aiScenario.unreachable)throw Error("synthetic_offline_ai_unreachable");
+  if(url.endsWith("/health")){
+    return aiResponse(aiScenario.healthStatus||200,aiScenario.health||readyAiHealth);
+  }
+  assert.equal(options.headers["X-VolunServe-Internal-Key"],LOCAL_AI_KEY);
+  return aiResponse(aiScenario.authStatus||200,aiScenario.authBody||{authenticated:true});
+}
+function probeIdentityAiReadiness(args){
+  assert.equal(args.endpoint,LOCAL_AI_ENDPOINT);
+  assert.equal(args.internalKey,LOCAL_AI_KEY);
+  return liveProbeIdentityAiReadiness({
+    ...args,fetchImpl:interceptPythonAiGet,wait:async()=>{},
+    healthTimeoutsMs:[5],authTimeoutsMs:[5]
+  });
+}
 app.use(express.json({limit:"16kb"}));
 
 function section(from,to) {
@@ -119,17 +162,21 @@ const modules=[
   section("async function loadUserProfile(","async function requireVerifiedResident("),
   section("async function requireOperationalAdmin(","function isVerifiedLguPersonnelProfile("),
   section("function identityAttemptCount(","const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT"),
+  section("function getIdentityAiEndpoint(","function getIdentityAiHeaders("),
+  getRoute("get","/api/identity/engine-health","/api/identity/status"),
   section("function identityAdminTimestampIso(","app.get(\n  \"/api/admin/identity/reviews\""),
   getRoute("get","/api/admin/identity/reviews","/api/admin/identity/reviews/:uid/evidence"),
   getRoute("get","/api/admin/identity/reviews/:uid/evidence","/api/admin/identity/reviews/:uid/decision"),
   getRoute("post","/api/admin/identity/reviews/:uid/decision","/api/admin/assistance/requests/:requestId/start-review"),
 ];
-assert.ok(modules[7].includes("requireOperationalAdmin") &&
-          modules[8].includes("signedIdentityEvidence({") &&
-          modules[8].includes("identity_evidence_expired") &&
-          modules[9].includes("self_identity_review_forbidden") &&
-          modules[9].includes("reviewIssuerEvidence(") &&
-          modules[9].includes("db.runTransaction("),
+assert.ok(modules[7].includes("probeIdentityAiReadiness({") &&
+          modules[7].includes("requireFirebaseUser") &&
+          modules[9].includes("requireOperationalAdmin") &&
+          modules[10].includes("signedIdentityEvidence({") &&
+          modules[10].includes("identity_evidence_expired") &&
+          modules[11].includes("self_identity_review_forbidden") &&
+          modules[11].includes("reviewIssuerEvidence(") &&
+          modules[11].includes("db.runTransaction("),
   "Refusing test of detached or substituted Admin logic");
 // Use the SAME JavaScript Promise realm as Firestore Admin SDK.
 // The Firestore SDK requires its transaction callback to return a native
@@ -138,14 +185,16 @@ const dependencyNames=[
   "app","db","auth","FieldValue","console","MAX_IDENTITY_AI_ATTEMPTS",
   "isVerifiedFirebaseToken","isCompletedVolunServeProfile",
   "isOperationalAdminProfile","selectedIdRecognized","reviewIssuerEvidence",
-  "signedIdentityEvidence","cloudinary","configureCloudinary"
+  "signedIdentityEvidence","cloudinary","configureCloudinary",
+  "probeIdentityAiReadiness","process"
 ];
 const installRoutes = new Function(...dependencyNames,modules.join("\n"));
 installRoutes(
   app,db,auth,FieldValue,console,3,
   isVerifiedFirebaseToken,isCompletedVolunServeProfile,
   isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence,
-  signedIdentityEvidence,cloudinary,configureCloudinary
+  signedIdentityEvidence,cloudinary,configureCloudinary,
+  probeIdentityAiReadiness,process
 );
 
 const adminUid="synthetic_admin_20261125";
@@ -232,6 +281,87 @@ async function run() {
     server=await new Promise(resolve=>{
       const listener=app.listen(0,"127.0.0.1",()=>resolve(listener));
     });
+
+    // The actual deployed protected engine-health route, Firebase ID token
+    // middleware, Node readiness function and private key handshake contract.
+    // The outbound Python AI is a local stub, not Render or any real account.
+    const engineRoute="/api/identity/engine-health";
+    process.env.IDENTITY_AI_SERVICE_URL="http://127.0.0.1:18761";
+    process.env.IDENTITY_AI_INTERNAL_KEY=LOCAL_AI_KEY;
+    const beforeIdentityChecks=(await db.collection("identityVerifications").get()).size;
+    aiScenario={health:{...readyAiHealth},authStatus:200,authBody:{authenticated:true}};
+    syntheticOutboundCalls=[];
+    let aiCheck=await call("GET",engineRoute,null);
+    assert.equal(aiCheck.status,401,JSON.stringify(aiCheck.body));
+    assert.equal(syntheticOutboundCalls.length,0);
+    pass("Actual engine-health route blocks unauthenticated callers before Python GET (401)");
+    aiCheck=await call("GET",engineRoute,unverifiedToken);
+    assert.equal(aiCheck.status,403,JSON.stringify(aiCheck.body));
+    assert.equal(syntheticOutboundCalls.length,0);
+    pass("Unverified Firebase email blocked before AI health/auth requests (403)");
+
+    aiCheck=await call("GET",engineRoute,residentToken);
+    assert.equal(aiCheck.status,200,JSON.stringify(aiCheck.body));
+    assert.equal(aiCheck.body.ready,true);
+    assert.equal(aiCheck.body.provider,"volunserve-custom-ai");
+    assert.equal(aiCheck.body.livenessImplemented,false);
+    assert.match(aiCheck.cacheControl,/no-store/);
+    assert.deepEqual(syntheticOutboundCalls.map(c=>c.path),
+      ["/health","/api/internal/auth-check"]);
+    pass("Authenticated Resident passes real Node readiness GET and matching internal-key handshake");
+
+    aiScenario={health:{...readyAiHealth},authStatus:401,authBody:{detail:"no"}};
+    syntheticOutboundCalls=[];
+    aiCheck=await call("GET",engineRoute,residentToken);
+    assert.equal(aiCheck.status,503,JSON.stringify(aiCheck.body));
+    assert.equal(aiCheck.body.error,"identity_ai_auth_mismatch");
+    assert.equal(aiCheck.body.ready,false);
+    assert.deepEqual(syntheticOutboundCalls.map(c=>c.path),
+      ["/health","/api/internal/auth-check"]);
+    pass("Incorrect backend→Python internal key returns fail-closed 503 mismatch without media");
+
+    aiScenario={health:{...readyAiHealth},authStatus:404};
+    aiCheck=await call("GET",engineRoute,residentToken);
+    assert.equal(aiCheck.status,503,JSON.stringify(aiCheck.body));
+    assert.equal(aiCheck.body.error,"identity_ai_auth_check_missing");
+    pass("Missing Python private auth endpoint prevents identity verification (503)");
+
+    aiScenario={health:{...readyAiHealth,documentOcrReady:false}};
+    syntheticOutboundCalls=[];
+    aiCheck=await call("GET",engineRoute,residentToken);
+    assert.equal(aiCheck.status,503,JSON.stringify(aiCheck.body));
+    assert.equal(aiCheck.body.error,"identity_document_readiness_failed");
+    assert.deepEqual(syntheticOutboundCalls.map(c=>c.path),["/health"]);
+    pass("Unready Python OCR fails before private auth and blocks resident ID scans");
+
+    aiScenario={health:{...readyAiHealth,profileComparisonReady:false}};
+    aiCheck=await call("GET",engineRoute,residentToken);
+    assert.equal(aiCheck.status,503,JSON.stringify(aiCheck.body));
+    assert.equal(aiCheck.body.error,"identity_document_readiness_failed");
+    pass("Missing profile comparison blocks AI before uploading ID or consuming attempts");
+
+    aiScenario={health:{...readyAiHealth},authStatus:200,authBody:{authenticated:false}};
+    aiCheck=await call("GET",engineRoute,residentToken);
+    assert.equal(aiCheck.status,503,JSON.stringify(aiCheck.body));
+    assert.equal(aiCheck.body.error,"identity_ai_auth_check_invalid");
+    pass("Private API returns HTTP 200 but authenticated:false: Node still denies readiness");
+
+    aiScenario={health:{...readyAiHealth},unreachable:true};
+    aiCheck=await call("GET",engineRoute,residentToken);
+    assert.equal(aiCheck.status,503,JSON.stringify(aiCheck.body));
+    assert.equal(aiCheck.body.error,"identity_ai_unreachable");
+    assert.equal(aiCheck.body.ready,false);
+    assert.match(aiCheck.cacheControl,/no-store/);
+    pass("Unreachable Python AI returns safe 503, no automatic retry of /verify");
+
+    aiScenario={health:{...readyAiHealth},authStatus:200,authBody:{authenticated:true}};
+    assert.equal((await db.collection("identityVerifications").get()).size,beforeIdentityChecks);
+    assert.ok(syntheticOutboundCalls.every(c=>c.method==="GET"));
+    assert.ok(syntheticOutboundCalls.every(c=>!c.path.includes("/verify")));
+    pass("Nine readiness failures/successes consume zero verification attempts, zero uploads or user writes");
+    delete process.env.IDENTITY_AI_SERVICE_URL;
+    delete process.env.IDENTITY_AI_INTERNAL_KEY;
+
     const target="synthetic_case_main_20261125";
     await record(target);
     const route="/api/admin/identity/reviews/"+target+"/decision";
