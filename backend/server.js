@@ -4728,9 +4728,11 @@ async function callIdentityAiService(
   options = {},
 ) {
   const endpoint =
-    options.documentPrecheck
-      ? getIdentityAiEndpoint().replace(/\/verify$/, "/document/precheck")
-      : getIdentityAiEndpoint();
+    options.faceOnly
+      ? getIdentityAiEndpoint().replace(/\/verify$/, "/verify-face-only")
+      : options.documentPrecheck
+        ? getIdentityAiEndpoint().replace(/\/verify$/, "/document/precheck")
+        : getIdentityAiEndpoint();
   if (!endpoint) {
     const error =
       new Error(
@@ -5361,7 +5363,7 @@ app.get(
   },
 );
 app.post(
-  ["/api/identity/verify", "/api/identity/verify-with-evidence"],
+  ["/api/identity/verify", "/api/identity/verify-with-evidence", "/api/identity/verify-face-only"],
   requireFirebaseUser,
   express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
   async (request, response) => {
@@ -5374,8 +5376,14 @@ app.post(
     let evidenceCommitted = false;
     let newEvidenceAssets = null;
     let previousEvidenceAssets = null;
+    const faceOnly = request.path === "/api/identity/verify-face-only";
 
     try {
+      // The historical Oct-23 face-only route is opt-in and disabled on
+      // unchanged production. Never accept a client form flag as authority.
+      if (faceOnly && String(process.env.VOLUNSERVE_FACE_ONLY_ENABLED || "").trim() !== "true") {
+        throw makeHttpError(404, "face_only_disabled", "Original face-only verification is not enabled.");
+      }
       // Firestore transaction ensures concurrent requests cannot bypass the
       // three-attempt limit. No attempt is consumed until the AI responds.
       await db.runTransaction(async (transaction) => {
@@ -5438,14 +5446,14 @@ app.post(
       // New clients use a dedicated, additive route. It MUST have consented
       // front/back/selfie evidence; never silently create another empty Admin
       // evidence card. The existing /verify route stays compatible with old apps.
-      const requiresPrivateEvidence = request.path === "/api/identity/verify-with-evidence";
+      const requiresPrivateEvidence = faceOnly || request.path === "/api/identity/verify-with-evidence";
       const parsedImages = requiresPrivateEvidence
-        ? await parseConsentedIdentityEvidence(request) : null;
+        ? await parseConsentedIdentityEvidence(request, {allowMissingBack: faceOnly}) : null;
       if (requiresPrivateEvidence && !parsedImages) {
         throw makeHttpError(400, "identity_evidence_consent_required",
           "Please accept private photo storage for Admin review before submitting.");
       }
-      const aiResult = await callIdentityAiService(request);
+      const aiResult = await callIdentityAiService(request, {faceOnly});
       // The existing AI and Admin decision gates remain unchanged. Secure
       // upload happens before any Firestore AI attempt is counted.
       const consentedImages = parsedImages || await parseConsentedIdentityEvidence(request);
@@ -5454,16 +5462,22 @@ app.post(
           images: consentedImages, uid, requestId, cloudinary, configureCloudinary,
         });
       }
-      const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
+      const documentScreening = faceOnly
+        ? {...normalizeIdDocumentScreening({declaredIdType:"national_id", status:"inconclusive", warningCodes:[]}),
+          method:"national_id_portrait_face_only_no_ocr_v1", detectedIdType:null,
+          authenticityVerified:false, livenessVerified:false, manualReviewRequired:true}
+        : normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
       // A face match cannot compensate for an unsupported, unknown or
       // mismatched selected government ID. Only recognized, selected types
       // can proceed to manual identity review; all others require a retry.
-      const recognizedSelectedId = selectedIdRecognized(documentScreening);
-      const decision = enforceSelectedIdDecision(
+      const recognizedSelectedId = !faceOnly && selectedIdRecognized(documentScreening);
+      // Face-only results are unverified clues, not OCR/issuance recognition.
+      // Every match stays pending until an authorized Admin checks the real ID.
+      const decision = faceOnly ? rawDecision : enforceSelectedIdDecision(
         rawDecision, documentScreening, aiResult?.livenessImplemented === true,
       );
-      const reviewTrack = classifyIdentityReviewTrack({
+      const reviewTrack = faceOnly ? "face_only_admin_review" : classifyIdentityReviewTrack({
         screening: documentScreening,
         decision,
         idImageQualityScore: numberOrNull(aiResult?.idImageQualityScore),
@@ -5524,7 +5538,11 @@ app.post(
           result.requiresManualReview
           ? "three_failed_attempts"
           : reviewTrack;
-        const resultMessage = reviewTrack === "blurry_id_review"
+        const resultMessage = faceOnly
+          ? decision === "failed"
+            ? "The government ID portrait and selfie did not match clearly. Retake or ask Admin for review. No OCR or document authenticity check was performed."
+            : "Original face-only comparison completed. No OCR, government ID issuance check or validated liveness was performed. Independent Admin review is required."
+          : reviewTrack === "blurry_id_review"
           ? "PENDING ADMIN REVIEW: Your claimed National ID scan is too blurry to identify. An Admin can request a clearer rescan; this does not verify the ID."
           : !recognizedSelectedId
           ? (documentScreening.warningCodes.includes("document_front_back_swapped")
@@ -5558,7 +5576,7 @@ app.post(
           ...diditCleanupFields(),
           uid,
           verificationId,
-          verificationMethod: "volunserve_ai",
+          verificationMethod: faceOnly ? "volunserve_ai_face_only" : "volunserve_ai",
           status: result.status,
           aiDecision: decision,
           decision: FieldValue.delete(),
@@ -5616,7 +5634,7 @@ app.post(
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
             documentScreening, reviewTrack: finalReviewTrack,
-            verificationMethod: "volunserve_ai",
+            verificationMethod: faceOnly ? "volunserve_ai_face_only" : "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
           },
@@ -5629,7 +5647,7 @@ app.post(
             identityVerified: false,
             identityVerificationProvider: FieldValue.delete(),
             identityVerificationSessionId: FieldValue.delete(),
-            identityVerificationMethod: "volunserve_ai",
+            identityVerificationMethod: faceOnly ? "volunserve_ai_face_only" : "volunserve_ai",
             identityVerificationStartedAt: FieldValue.serverTimestamp(),
             identityFailureReason: decision === "failed" && !result.requiresManualReview
               ? resultMessage : FieldValue.delete(),
