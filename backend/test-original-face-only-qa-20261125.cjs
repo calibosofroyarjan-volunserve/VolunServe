@@ -71,6 +71,9 @@ test("Admin independent approval still required and AI cannot auto-verify",()=>{
   assert.match(s,/reviewIssuerEvidence\(/);
   assert.match(s,/requireOperationalAdmin/);
   assert.match(s,/\["verified", "manual_review"\].includes\(verification.aiDecision\)/);
+  assert.match(s,/verification\.faceComparisonPassed !== true/);
+  assert.match(s,/faceComparisonPassed: faceOnly \? faceComparisonPassed : FieldValue\.delete\(\)/);
+  assert.match(s,/aiResult\?\.faceComparisonPassed === true/);
 });
 
 test("face-only readiness skips OCR but always proves private Node-Python authentication",async()=>{
