@@ -94,6 +94,17 @@ jobs:
           NODE
       - name: Verify Residents, Admins, Volunteers and Firestore rules in emulator
         run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/test-emergency-manual-flow-emulator-20261125.cjs"
+      - name: Replay hash-pinned synthetic local Rules copy in isolated emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIXTURE="$(mktemp -t volunserve-qa-rules-XXXXXX)"
+          trap 'rm -f "$FIXTURE"' EXIT
+          cp firestore.rules "$FIXTURE"
+          SHA="$(sha256sum "$FIXTURE" | cut -d' ' -f1)"
+          VOLUNSERVE_QA_FIRESTORE_RULES_FILE="$FIXTURE" \\
+          VOLUNSERVE_QA_EXPECTED_RULES_SHA256="$SHA" \\
+          npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/test-emergency-manual-flow-emulator-20261125.cjs"
       - name: Export web bundle without deploying
         run: npx expo export --platform web --output-dir dist
       # This is deliberately LAST. Isolated tests still execute on a frozen
