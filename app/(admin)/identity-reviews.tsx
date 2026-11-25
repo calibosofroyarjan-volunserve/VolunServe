@@ -801,13 +801,13 @@ function ReviewDetail({
               {weakImage ? "Low · Blurry" : idQuality || "Not evaluated"}
             </Text>
           </View>
-          <View style={styles.premiumResultRow}>
+          {!faceOnlyReview ? <View style={styles.premiumResultRow}>
             <Text style={styles.premiumResultLabel}>ID Back Screening</Text>
             <Text style={styles.premiumResultValue}>
               {item.documentScreening?.backSideScreened === true
                 ? "Screened · Unverified" : "Not evaluated"}
             </Text>
-          </View>
+          </View> : null}
           <View style={styles.premiumResultRow}>
             <Text style={styles.premiumResultLabel}>AI Route</Text>
             <Text style={[styles.premiumResultValue,blurry && styles.premiumWarningText]}>
@@ -891,7 +891,7 @@ function ReviewDetail({
           <View style={styles.premiumEvidenceTiles}>
             {([
               {key:"front" as const,label:"Government ID — Front",icon:"id-card-outline" as const},
-              {key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const},
+              ...(faceOnlyReview ? [] : [{key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const}]),
               {key:"selfie" as const,label:"Live Selfie",icon:"person-outline" as const},
             ]).map(tile => {
               const uri = evidenceUris?.[tile.key];
@@ -972,7 +972,7 @@ function ReviewDetail({
             </View>
           </View>
           <Text style={styles.premiumDisclaimer}>
-            AI/OCR checks are preliminary and do not prove government ID authenticity, residency, or liveness.
+            {faceOnlyReview ? "Original 1-to-1 face comparison is a preliminary clue. No OCR or ID-text check was performed. Admin must independently validate the physical government ID; liveness is not proven." : "AI/OCR checks are preliminary and do not prove government ID authenticity, residency, or liveness."}
           </Text>
 
           {pending ? (
@@ -1053,7 +1053,7 @@ function ReviewDetail({
             <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
             <InfoLine label="AI decision" value={item.aiDecision || "—"} />
             <InfoLine label="Status" value={item.status || "—"} />
-            <DocumentScreeningSummary screening={item.documentScreening} />
+            {!faceOnlyReview ? <DocumentScreeningSummary screening={item.documentScreening} /> : null}
           </View>
         ) : activeTab === "audit" ? (
           <View style={styles.premiumCard}>
