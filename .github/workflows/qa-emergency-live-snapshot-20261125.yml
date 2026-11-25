@@ -1,0 +1,67 @@
+name: QA Emergency live-source reconciliation (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/emergency-prod-5af28d-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safe-qa:
+    name: Validate live-derived manual Emergency Response
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Confirm exact Hosting-snapshot ancestry and no production config changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIVE=5af28d279618dacd5eab518e5e0d52259eae8844
+          git merge-base --is-ancestor "$LIVE" HEAD
+          git diff --exit-code "$LIVE" HEAD --             firestore.rules functions/index.js lib/firebase.ts firebase.json             backend/server.js package.json package-lock.json             storage.rules .firebaserc
+          node <<'NODE'
+          "use strict";
+          const {execFileSync}=require("node:child_process");
+          const assert=require("node:assert/strict");
+          const changed=execFileSync("git",["diff","--name-only","--no-renames","5af28d279618dacd5eab518e5e0d52259eae8844","HEAD"],{encoding:"utf8"}).trim().split("\n").filter(Boolean);
+          const allowed=new Set([
+            "app/(admin)/admin-cases.tsx",
+            "app/(tabs)/disaster-response.tsx",
+            "app/(tabs)/my-cases.tsx",
+            "app/(tabs)/volunteer.tsx",
+            "app/(tabs)/volunteer.web.tsx",
+            "components/admin/EmergencyFiveTabDesign.tsx",
+            "components/admin/VolunteerEligibilityValidation.tsx",
+            "components/tabs/MapTracking.native.tsx",
+            "components/tabs/ResponseFlow.web.tsx",
+            "lib/emergencyArrival.ts",
+            "scripts/test-emergency-live-reconciled-20261125.cjs",
+            "scripts/test-emergency-manual-flow-emulator-20261125.cjs",
+            ".github/workflows/qa-emergency-live-snapshot-20261125.yml"
+          ]);
+          for(const file of changed)assert(allowed.has(file),"BLOCKED unrelated live path "+file);
+          assert(changed.length>0,"No emergency changes detected");
+          console.log("PASS unchanged production security/config/backend and "+changed.length+" scoped Emergency files");
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Emergency Response source and 100 m GPS contracts
+        run: node --test scripts/test-emergency-live-reconciled-20261125.cjs
+      - name: Verify TypeScript
+        run: npx tsc --noEmit --pretty false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Verify Residents, Admins, Volunteers and Firestore rules in emulator
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/test-emergency-manual-flow-emulator-20261125.cjs"
+      - name: Export web bundle without deploying
+        run: npx expo export --platform web --output-dir dist
