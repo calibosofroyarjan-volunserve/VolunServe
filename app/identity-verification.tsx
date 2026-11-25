@@ -215,6 +215,9 @@ export default function IdentityVerification() {
     useState<IdentityVerificationStatusResult | null>(null);
   const [localMessage, setLocalMessage] =
     useState("");
+  // A failed account may explicitly begin a new ID+selfie attempt.
+  // Never hide an actual Pending/Verified status behind this local flag.
+  const [retryingFailed, setRetryingFailed] = useState(false);
 
   useEffect(() => {
     let stopProfile:
@@ -276,9 +279,13 @@ export default function IdentityVerification() {
   const identityStatus =
     getIdentityStatus(profile);
 
-  const effectiveStatus =
+  const latestIdentityStatus =
     statusResult?.identityStatus ||
     identityStatus;
+  const effectiveStatus =
+    retryingFailed && latestIdentityStatus === "failed"
+      ? "basic"
+      : latestIdentityStatus;
 
   const selectedIdLabel =
     useMemo(
@@ -573,6 +580,7 @@ export default function IdentityVerification() {
         return;
       }
 
+      let requestStarted = false;
       try {
         // A readiness failure must not submit ID/selfie files or consume
         // one of the Resident's three AI verification attempts.
@@ -580,6 +588,9 @@ export default function IdentityVerification() {
         setLocalMessage("");
         await checkIdentityEngineReady();
         setStep(3);
+        // After this point the backend may have committed even if mobile
+        // connectivity drops before its HTTP response reaches this screen.
+        requestStarted = true;
 
         const result =
           await submitIdentityVerification(
@@ -591,6 +602,7 @@ export default function IdentityVerification() {
             },
           );
 
+        setRetryingFailed(false);
         setStatusResult({
           identityStatus:
             result.status,
@@ -616,7 +628,9 @@ export default function IdentityVerification() {
               result.status ===
               "verified"
                 ? "Identity verification completed successfully."
-                : "Your submission is pending LGU/Admin review."
+                : result.status === "failed"
+                  ? "This attempt failed. Please retake the government ID and face scan before retrying."
+                  : "Your submission is pending LGU/Admin review."
             ),
         );
 
@@ -632,12 +646,38 @@ export default function IdentityVerification() {
       } catch (
         error: any
       ) {
-        setStep(2);
-        const explanation =
+        const explanation = String(
           error?.message ||
-          "Identity verification could not be completed. Your captured photos are still available. Wait for the AI service to become ready, then retry.";
-        // Inline feedback is required on React Native Web: Alert.alert may
-        // not show a native dialog in web browsers.
+          "Identity verification could not be completed. Your captured photos are still available. Wait for the AI service to become ready, then retry."
+        );
+        if (requestStarted) {
+          // A lost HTTP response is not proof that Firebase rejected the
+          // submission. Fetch the authoritative, saved account status
+          // before telling the Resident to retry or sending another selfie.
+          let latest: IdentityVerificationStatusResult | null = null;
+          try {
+            latest = await getIdentityVerificationStatus();
+          } catch {
+            // No confirmed persisted status; do NOT assume success.
+          }
+          if (
+            latest &&
+            (
+              (latest.identityStatus === "verified" && latest.identityVerified === true) ||
+              latest.identityStatus === "pending" ||
+              latest.identityStatus === "failed"
+            )
+          ) {
+            setRetryingFailed(false);
+            setStatusResult(latest);
+            setLocalMessage(latest.message || explanation);
+            setStep(3);
+            return;
+          }
+        }
+        // A readiness failure never posted ID/selfie bytes; a submitted
+        // request whose status cannot be confirmed remains unverified.
+        setStep(2);
         setLocalMessage(explanation);
         if (Platform.OS !== "web") {
           Alert.alert("Verification Not Completed", explanation);
@@ -749,6 +789,43 @@ export default function IdentityVerification() {
         primaryAction={() =>
           router.back()
         }
+      />
+    );
+  }
+
+  if (effectiveStatus === "failed") {
+    return (
+      <StatusScreen
+        icon="alert-circle-outline"
+        title="Verification Attempt Failed"
+        message={
+          localMessage ||
+          statusResult?.message ||
+          "This identity attempt could not be verified. Your Resident account is not banned; you can try again."
+        }
+        background={COLORS.dangerBg}
+        color={COLORS.danger}
+        badge="Failed · Retry Allowed"
+        documentScreening={statusResult?.documentScreening}
+        primaryLabel="Try Verification Again"
+        primaryAction={() => {
+          // Never reuse stale document and selfie bytes for a new attempt.
+          documentPrecheckRevisionRef.current += 1;
+          setRetryingFailed(true);
+          setStatusResult(null);
+          setLocalMessage("");
+          setIdDocument(null);
+          setIdBackDocument(null);
+          setSelfie(null);
+          setConsent(false);
+          setDocumentConsent(false);
+          setDocumentPrecheckOutcome(null);
+          setDocumentPrecheckMessage("");
+          setCameraReady(false);
+          setStep(1);
+        }}
+        secondaryLabel="Back to Profile"
+        secondaryAction={() => router.back()}
       />
     );
   }
