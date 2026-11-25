@@ -10,7 +10,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const {GoogleAuth} = require("google-auth-library");
+// Load the OAuth client only when contacting Hosting; offline selftests need no dependencies.
 
 const SITE = "volunserve-3aa5b";
 const BEFORE_SHA = "5af28d279618dacd5eab518e5e0d52259eae8844";
@@ -35,6 +35,7 @@ async function token() {
   assert(credentials.type === "service_account" && credentials.project_id === SITE &&
     credentials.private_key && credentials.client_email,
     "BLOCKED: Hosting service account not for pinned production project");
+  const {GoogleAuth} = require("google-auth-library");
   const auth = new GoogleAuth({scopes:["https://www.googleapis.com/auth/firebase.hosting"]});
   const client = await auth.getClient();
   const value = await client.getAccessToken();
