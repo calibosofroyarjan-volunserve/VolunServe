@@ -21,8 +21,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Check rollback selector with fictional data
-        run: node scripts/original-ai-hosting-pinned-rollback-20261125.cjs selftest
+      - name: Validate rollback script syntax and selector with fictional data
+        run: |
+          node --check scripts/original-ai-hosting-pinned-rollback-20261125.cjs
+          node scripts/original-ai-hosting-pinned-rollback-20261125.cjs selftest
       - name: Install existing repo dependencies only
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Read exact live Hosting immutable release using existing service account
