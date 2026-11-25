@@ -47,7 +47,7 @@ test("All records and queue API retain the special 3-failure reason",()=>{
    server.indexOf('"/api/admin/identity/reviews"'));
  assert.ok(routeSource.length>6000,"Identity verify route boundary is missing");
  assert.match(routeSource,/reviewTrack: finalReviewTrack,/);
- assert.match(server,/\["blurry_id_review", "priority_admin_review", "standard_admin_review", "three_failed_attempts"\]/);
+ assert.match(server,/\["blurry_id_review", "priority_admin_review", "standard_admin_review", "three_failed_attempts", "face_only_admin_review"\]/);
  assert.doesNotMatch(routeSource,/identityVerified:\s*true/);
 });
 test("Unsupported document remains unapprovable despite escalation",()=>{
@@ -59,6 +59,8 @@ test("Unsupported document remains unapprovable despite escalation",()=>{
  assert.equal(route("failed",3).reviewTrack,"three_failed_attempts");
  const adminRoute=server.slice(server.indexOf('"/api/admin/identity/reviews/:uid/decision"'),
    server.indexOf('"/api/admin/assistance/requests/:requestId/start-review"'));
- assert.match(adminRoute,/if \(!selectedIdRecognized\(selectedIdCheck\)\)/);
+ assert.match(adminRoute,/if \(!faceOnlyReview && !selectedIdRecognized\(selectedIdCheck\)\)/);
+ assert.match(adminRoute,/face_only_independent_review_required/);
+ assert.match(adminRoute,/face_only_evidence_unavailable/);
  assert.match(adminRoute,/selected_government_id_not_recognized/);
 });
