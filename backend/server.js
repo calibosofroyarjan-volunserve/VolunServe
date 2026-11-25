@@ -4727,12 +4727,12 @@ async function callIdentityAiService(
   request,
   options = {},
 ) {
-  const endpoint =
-    options.faceOnly
-      ? getIdentityAiEndpoint().replace(/\/verify$/, "/verify-face-only")
-      : options.documentPrecheck
-        ? getIdentityAiEndpoint().replace(/\/verify$/, "/document/precheck")
-        : getIdentityAiEndpoint();
+  const configuredAiEndpoint = getIdentityAiEndpoint();
+  const endpoint = !configuredAiEndpoint ? "" : options.faceOnly
+    ? configuredAiEndpoint.replace(/\/verify$/, "/verify-face-only")
+    : options.documentPrecheck
+      ? configuredAiEndpoint.replace(/\/verify$/, "/document/precheck")
+      : configuredAiEndpoint;
   if (!endpoint) {
     const error =
       new Error(
