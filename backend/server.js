@@ -5499,9 +5499,16 @@ app.post(
       const recognizedSelectedId = !faceOnly && selectedIdRecognized(documentScreening);
       // Face-only results are unverified clues, not OCR/issuance recognition.
       // Every match stays pending until an authorized Admin checks the real ID.
-      const decision = faceOnly ? rawDecision : enforceSelectedIdDecision(
-        rawDecision, documentScreening, aiResult?.livenessImplemented === true,
-      );
+      // The historical matcher returns "manual_review" for BOTH matched
+      // and uncertain faces. Do not lock an uncertain comparison into an
+      // unapprovable pending Admin case after the first attempt. Treat it
+      // as a failed retry until the existing 3-attempt review threshold.
+      // This affects ONLY the explicitly opted-in face-only route.
+      const decision = faceOnly
+        ? (faceComparisonPassed ? "manual_review" : "failed")
+        : enforceSelectedIdDecision(
+          rawDecision, documentScreening, aiResult?.livenessImplemented === true,
+        );
       const reviewTrack = faceOnly ? "face_only_admin_review" : classifyIdentityReviewTrack({
         screening: documentScreening,
         decision,
