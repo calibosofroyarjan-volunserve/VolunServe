@@ -72,3 +72,27 @@ test("Admin independent approval still required and AI cannot auto-verify",()=>{
   assert.match(s,/requireOperationalAdmin/);
   assert.match(s,/verification\.aiDecision !== "verified"/);
 });
+
+test("face-only readiness skips OCR but always proves private Node-Python authentication",async()=>{
+  const {probeIdentityAiReadiness}=require("./identityAiReadiness");
+  const health={ok:true,verificationEngineReady:true,internalAuthConfigured:true,
+    documentOcrReady:false,profileComparisonReady:false,documentPrecheckReady:false,
+    livenessImplemented:false};
+  const mocked=async(url,request)=>{
+    assert.equal(request.method,"GET");
+    if(url.endsWith("/health"))return{ok:true,status:200,json:async()=>health};
+    assert.ok(url.endsWith("/api/internal/auth-check"));
+    assert.equal(request.headers["X-VolunServe-Internal-Key"],"SYNTHETIC_TEST_ONLY_KEY");
+    return{ok:true,status:200,json:async()=>({authenticated:true})};
+  };
+  const opts={endpoint:"https://nonexistent.example/verify",internalKey:"SYNTHETIC_TEST_ONLY_KEY",
+    fetchImpl:mocked,wait:async()=>{},healthTimeoutsMs:[50],authTimeoutsMs:[50]};
+  const face=await probeIdentityAiReadiness({...opts,requireDocumentReadiness:false});
+  assert.equal(face.statusCode,200);
+  assert.equal(face.body.ready,true);
+  assert.equal(face.body.documentOcrReady,false);
+  assert.equal(face.body.livenessImplemented,false);
+  const strict=await probeIdentityAiReadiness(opts);
+  assert.equal(strict.statusCode,503);
+  assert.equal(strict.body.error,"identity_document_readiness_failed");
+});
