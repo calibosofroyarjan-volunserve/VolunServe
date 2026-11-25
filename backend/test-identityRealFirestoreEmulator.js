@@ -166,8 +166,16 @@ async function scenario({
     });
   }
   async function finalize(){
+    // Cloud Firestore SDK requires its transaction callback to return a
+    // native host-realm Promise. The extracted production callback executes
+    // inside a VM, whose async Promise belongs to another JavaScript realm.
+    // Wrap ONLY the test database boundary; keep the real transaction source.
+    const emulatorBridge={
+      collection:name=>db.collection(name),
+      runTransaction:callback=>db.runTransaction(tx=>Promise.resolve(callback(tx))),
+    };
     const ctx={
-      uid,requestId,verificationId,db,
+      uid,requestId,verificationId,db:emulatorBridge,
       userRef,verificationRef,evidenceRef,
       documentScreening,
       newEvidenceAssets:images,previousEvidenceAssets:null,
