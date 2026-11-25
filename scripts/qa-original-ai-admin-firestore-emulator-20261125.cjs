@@ -7,7 +7,6 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
 
 const EXPECTED_PROJECT = "demo-volunserve-original-ai-admin-qa";
 if (process.env.GCLOUD_PROJECT !== EXPECTED_PROJECT &&
@@ -76,12 +75,20 @@ assert.ok(modules[7].includes("requireOperationalAdmin") &&
           modules[8].includes("reviewIssuerEvidence(") &&
           modules[8].includes("db.runTransaction("),
   "Refusing test of detached or substituted Admin logic");
-vm.runInNewContext(modules.join("\n"),{
-  app,db,auth,FieldValue,console,
-  MAX_IDENTITY_AI_ATTEMPTS:3,
+// Use the SAME JavaScript Promise realm as Firestore Admin SDK.
+// The Firestore SDK requires its transaction callback to return a native
+// Promise; vm.runInNewContext creates cross-realm promises and falsely fails.
+const dependencyNames=[
+  "app","db","auth","FieldValue","console","MAX_IDENTITY_AI_ATTEMPTS",
+  "isVerifiedFirebaseToken","isCompletedVolunServeProfile",
+  "isOperationalAdminProfile","selectedIdRecognized","reviewIssuerEvidence"
+];
+const installRoutes = new Function(...dependencyNames,modules.join("\n"));
+installRoutes(
+  app,db,auth,FieldValue,console,3,
   isVerifiedFirebaseToken,isCompletedVolunServeProfile,
   isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence
-},{filename:"deployed-production-identity-admin-only.vm.js",timeout:10000});
+);
 
 const adminUid="synthetic_admin_20261125";
 const unverifiedUid="synthetic_unverified_20261125";
