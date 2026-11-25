@@ -238,5 +238,137 @@ jobs:
               try: proc.wait(timeout=10)
               except subprocess.TimeoutExpired: proc.kill()
           PY
+      - name: Retrieve deployed Node identity decision modules (read-only)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs');
+            const path=require('path');
+            const {owner,repo}=context.repo;
+            const ref='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const names=[
+              'selectedIdPolicy.js',
+              'identityHybridPrecheckDecision.js',
+              'automaticIdentityApprovalPolicy.js',
+              'identityAutoApprovalGateway.js',
+            ];
+            const target=path.join(process.env.GITHUB_WORKSPACE,'live-ai','backend');
+            fs.mkdirSync(target,{recursive:true});
+            for(const name of names) {
+              const {data}=await github.rest.repos.getContent({
+                owner,repo,path:'backend/'+name,ref
+              });
+              if(Array.isArray(data)||data.encoding!=='base64') throw Error('Missing deployed Node file '+name);
+              fs.writeFileSync(path.join(target,name),Buffer.from(data.content,'base64'));
+              core.info('Pinned deployed Node policy '+name);
+            }
+      - name: HTTP original face submit with fabricated image, then Node approval routing
+        working-directory: live-ai/identity-ai
+        env:
+          IDENTITY_AI_INTERNAL_KEY: local-qa-only-nonsecret
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys, time, urllib.request, urllib.error
+          from test_synthetic_document_pipeline import synthetic_photo, NATIONAL_SAMPLE, BACK_SIDE_SAMPLE, SCHOOL_SAMPLE
+          from io import BytesIO
+          from PIL import Image
+
+          base='http://127.0.0.1:18766'
+          proc=subprocess.Popen([sys.executable,'-m','uvicorn','main:app','--host','127.0.0.1','--port','18766','--no-access-log'],
+                                env=os.environ.copy(),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+          def send(url, data, headers):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(base+url,data=data,headers=headers),timeout=65) as resp:
+                      return resp.status,json.loads(resp.read())
+              except urllib.error.HTTPError as e:
+                  return e.code,json.loads(e.read())
+          def form(front,back,selfie=None,id_type='national_id'):
+              boundary='SyntheticOriginalAiPrivateOnly'
+              parts=[]
+              entries=[('idType',id_type),('idDocument',front),('idBackDocument',back)]
+              if selfie is not None: entries.append(('selfie',selfie))
+              for field,value in entries:
+                  is_file=isinstance(value,bytes)
+                  suffix='; filename="DEMO-NOT-A-REAL-ID.png"\r\nContent-Type: image/png' if is_file else ''
+                  part=('Content-Disposition: form-data; name="'+field+'"'+suffix)
+                  raw=value if is_file else value.encode()
+                  parts.append(('--'+boundary+'\r\n'+part+'\r\n\r\n').encode()+raw+b'\r\n')
+              return b''.join(parts)+('--'+boundary+'--\r\n').encode(),boundary
+          headers={
+            'X-VolunServe-User-Id':'synthetic-qa-user',
+            'X-VolunServe-Internal-Key':'local-qa-only-nonsecret',
+            'X-VolunServe-Profile-First-Name':'TEST',
+            'X-VolunServe-Profile-Last-Name':'SAMPLE',
+          }
+          front,_=synthetic_photo(NATIONAL_SAMPLE)
+          back,_=synthetic_photo(BACK_SIDE_SAMPLE)
+          school,_=synthetic_photo(SCHOOL_SAMPLE)
+          output=BytesIO()
+          Image.new('RGB',(320,320),(239,240,241)).save(output,format='PNG')
+          selfie=output.getvalue()
+          try:
+              for _ in range(40):
+                  try:
+                      with urllib.request.urlopen(base+'/health',timeout=3) as response:
+                          if response.status==200: break
+                  except Exception: time.sleep(.5)
+              else: raise AssertionError('Isolated localhost FaceMesh service not started')
+              data,boundary=form(front,back,selfie)
+              h={**headers,'Content-Type':'multipart/form-data; boundary='+boundary}
+              code,face=send('/verify',data,h)
+              assert code==200,('Fabricated photo verification returned HTTP',code)
+              assert face['status']=='failed',('Face-less fake documents must fail',face['status'])
+              assert face.get('decision')=='failed'
+              assert face.get('documentScreening',{}).get('detectedIdType')=='national_id'
+              assert face.get('livenessImplemented') is False
+              assert not face.get('authenticityVerified',False)
+              assert 'id_face_not_detected' in face.get('warnings',[]), 'No face in fabricated ID was not rejected'
+              print('PASS: actual /verify executes OCR then MediaPipe and rejects no-face synthetic image')
+              with open('synthetic-face-result.json','w') as f:
+                  json.dump({k:face.get(k) for k in ('status','decision','documentScreening','livenessImplemented','authenticityVerified')},f)
+              data,boundary=form(school,back,selfie)
+              code,body=send('/verify',data,{**headers,'Content-Type':'multipart/form-data; boundary='+boundary})
+              assert code==200 and body.get('status')=='failed',('School ID not rejected',code)
+              assert body.get('documentScreening',{}).get('status')=='unsupported'
+              print('PASS: actual /verify rejects school ID before face comparison')
+              data,boundary=form(front,back,front)
+              code,body=send('/verify',data,{**headers,'Content-Type':'multipart/form-data; boundary='+boundary})
+              assert code==400 and 'different images' in body.get('detail','')
+              print('PASS: actual /verify rejects exact ID portrait reused as selfie')
+              data,boundary=form(front,back,selfie)
+              code,body=send('/verify',data,{'Content-Type':'multipart/form-data; boundary='+boundary})
+              assert code==401,'Unauthorized caller reached private face engine'
+              print('PASS: actual /verify rejects missing internal key')
+          finally:
+              proc.terminate()
+              try:proc.wait(timeout=10)
+              except subprocess.TimeoutExpired:proc.kill()
+          PY
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const path=require('node:path');
+          const backend=path.resolve('../backend');
+          const face=JSON.parse(fs.readFileSync('synthetic-face-result.json','utf8'));
+          const {enforceSelectedIdDecision}=require(backend+'/selectedIdPolicy.js');
+          const {classifyHybridDocumentPrecheck}=require(backend+'/identityHybridPrecheckDecision.js');
+          const {assessAutomaticIdentityApproval}=require(backend+'/identityAutoApprovalGateway.js');
+          (async()=>{
+            const screened=face.documentScreening;
+            assert.equal(enforceSelectedIdDecision(face.decision,screened,face.livenessImplemented),'failed');
+            const ocr=classifyHybridDocumentPrecheck({screening:screened,aiOutcome:'pass'});
+            assert.equal(ocr.outcome,'pass','Synthetic valid card should permit face scan only');
+            assert.equal(ocr.decision,'ready_for_face_scan');
+            assert.equal(enforceSelectedIdDecision('verified',screened,true),'manual_review',
+              'Even a forged positive AI response cannot auto-promote Verified Resident');
+            const approval=await assessAutomaticIdentityApproval({
+              screening:screened,face:{result:'match',samePersonAssertion:true},
+              attempt:{uid:'synthetic-qa-user',verificationId:'synthetic-attempt',freshCapture:true}
+            });
+            assert.equal(approval.eligible,false,'No independent issuer/PAD validators');
+            assert.equal(approval.decision,'pending_admin_review');
+            console.log('PASS: live Node policies safely consume real synthetic Python AI result, without Verified Resident elevation');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
 # All test identities and ID images are fabricated in RAM; localhost only,
 # no API calls to deployed Render, no Cloudinary upload or Firebase usage.
