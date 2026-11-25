@@ -11,6 +11,7 @@ on:
       - backend/test-identityTrustedSignedProof.js
       - backend/test-identityAutomaticTransactionIntegration.js
       - backend/test-identityRealFirestoreEmulator.js
+      - backend/test-identityRealFirebaseAuthEmulator.js
       - backend/qa-identity-firestore-emulator.json
       - backend/qa-identity-firestore-emulator.rules
       - .github/workflows/qa-trusted-auto-firestore-emulator-20261125.yml
@@ -53,6 +54,7 @@ jobs:
             'backend/test-identityTrustedSignedProof.js',
             'backend/test-identityAutomaticTransactionIntegration.js',
             'backend/test-identityRealFirestoreEmulator.js',
+            'backend/test-identityRealFirebaseAuthEmulator.js',
             'backend/qa-identity-firestore-emulator.json',
             'backend/qa-identity-firestore-emulator.rules',
             '.github/workflows/qa-trusted-auto-firestore-emulator-20261125.yml',
