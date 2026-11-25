@@ -15,11 +15,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: false
-          persist-credentials: false
+      - name: Fetch exact reviewed commit without processing legacy broken gitlinks
+        shell: bash
+        env:
+          REVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init -q .
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "$REVIEW_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$REVIEW_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -43,11 +50,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: false
-          persist-credentials: false
+      - name: Fetch exact reviewed commit without processing legacy broken gitlinks
+        shell: bash
+        env:
+          REVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init -q .
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "$REVIEW_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$REVIEW_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
