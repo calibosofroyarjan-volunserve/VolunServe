@@ -5562,12 +5562,27 @@ app.post(
         assets: newEvidenceAssets,
         aiDecision: decision,
       });
+      // One independent issuer and PAD attestation may each grant access once.
+      // Store only cryptographic replay digests, never signed JWTs or ID numbers.
+      const proofReplayRefs = autoCompletion.eligible ? {
+        issuer: db.collection("identityTrustedProofUses")
+          .doc(autoCompletion.trustedProofReplayKeys.issuer),
+        pad: db.collection("identityTrustedProofUses")
+          .doc(autoCompletion.trustedProofReplayKeys.pad),
+      } : null;
 
       const outcome = await db.runTransaction(async (transaction) => {
-        const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
+        const [
+          userSnapshot, verificationSnapshot, evidenceSnapshot,
+          issuerProofSnapshot, padProofSnapshot,
+        ] = await Promise.all([
           transaction.get(userRef),
           transaction.get(verificationRef),
           transaction.get(evidenceRef),
+          ...(proofReplayRefs ? [
+            transaction.get(proofReplayRefs.issuer),
+            transaction.get(proofReplayRefs.pad),
+          ] : []),
         ]);
         const current = verificationSnapshot.data() || {};
         previousEvidenceAssets = evidenceSnapshot.exists
@@ -5579,6 +5594,11 @@ app.post(
         if (!userSnapshot.exists || userSnapshot.data()?.identityVerified === true) {
           throw makeHttpError(409, "identity_account_changed",
             "Your account verification status has changed. Please refresh your identity status.");
+        }
+        if (autoCompletion.eligible &&
+            (issuerProofSnapshot?.exists || padProofSnapshot?.exists)) {
+          throw makeHttpError(409, "trusted_proof_already_consumed",
+            "A trusted identity proof was already used. Request fresh verification.");
         }
         const attemptCount = identityAttemptCount(current.aiAttemptCount) + 1;
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
@@ -5729,6 +5749,14 @@ app.post(
             updatedAt: FieldValue.serverTimestamp(),
           }, { merge: true });
         if (autoCompletion.eligible) {
+          // Both unique replay digests are consumed in the same transaction.
+          // Re-use from another account, attempt or concurrent call fails.
+          for (const [proofKind, ref] of Object.entries(proofReplayRefs)) {
+            transaction.create(ref, {
+              proofKind, uid, requestId, verificationId,
+              createdAt:FieldValue.serverTimestamp(),
+            });
+          }
           // Record automated grant atomically; do not persist face images,
           // government ID numbers, or any unsigned provider response.
           transaction.create(
