@@ -28,12 +28,13 @@ for (const key of [
 ]) {
   if (process.env[key]) throw Error("Emulator test blocked: credential in environment: "+key);
 }
-const adminSdk = require("firebase-admin");
+const {initializeApp,deleteApp} = require("firebase-admin/app");
+const {getAuth} = require("firebase-admin/auth");
+const {getFirestore,FieldValue} = require("firebase-admin/firestore");
 const express = require("express");
-adminSdk.initializeApp({projectId:EXPECTED_PROJECT});
-const auth = adminSdk.auth();
-const db = adminSdk.firestore();
-const FieldValue = adminSdk.firestore.FieldValue;
+const firebaseApp=initializeApp({projectId:EXPECTED_PROJECT});
+const auth=getAuth(firebaseApp);
+const db=getFirestore(firebaseApp);
 const source = fs.readFileSync(path.join(__dirname,"backend","server.js"),"utf8");
 const {isVerifiedFirebaseToken,isCompletedVolunServeProfile} =
   require("./backend/verifiedFirebaseToken");
@@ -283,7 +284,7 @@ async function run() {
     console.log("PASS: "+labels.length+" real emulator HTTP+Firestore Admin scenarios; DEMO project only");
   } finally {
     if(server) await new Promise(resolve=>server.close(resolve));
-    await adminSdk.app().delete();
+    await deleteApp(firebaseApp);
   }
 }
 run().catch(e=>{console.error("QA FAIL:",e.stack||e);process.exitCode=1;});
