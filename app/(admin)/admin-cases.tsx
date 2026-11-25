@@ -195,6 +195,8 @@ type ResponseAssignment = {
   barangay?: string;
   acceptedAt?: any;
   declinedAt?: any;
+  residentConfirmationStatus?: string;
+  residentConfirmationOutcome?: string;
 };
 
 type LguPersonnelCandidate = {
@@ -1273,56 +1275,7 @@ export default function AdminCases() {
   }, [isAuthorized]);
 
 
-  useEffect(() => {
-    if (!isAuthorized) return;
 
-    return onSnapshot(
-      collection(db, "volunteerFieldReports"),
-      (snapshot) => {
-        const list: VolunteerFieldReport[] = snapshot.docs.map((item) => {
-          const data: any = item.data();
-
-          return {
-            id: item.id,
-            assignmentId: String(data.assignmentId || item.id),
-            caseId: String(data.caseId || ""),
-            volunteerId: String(data.volunteerId || ""),
-            volunteerName: String(data.volunteerName || "Volunteer"),
-            barangay: String(data.barangay || ""),
-            situationSummary: String(data.situationSummary || ""),
-            assistanceProvided: String(data.assistanceProvided || ""),
-            peopleHelped: Number(data.peopleHelped || 0),
-            remainingNeeds: normalizeStringArray(data.remainingNeeds),
-            remainingNeedsNote: String(data.remainingNeedsNote || ""),
-            lguFollowUpRequired: data.lguFollowUpRequired === true,
-            evidenceUrls: normalizeStringArray(data.evidenceUrls),
-            reportStatus: String(data.reportStatus || "submitted"),
-            adminReviewNote: String(data.adminReviewNote || ""),
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            reviewedAt: data.reviewedAt,
-            reviewedBy: String(data.reviewedBy || ""),
-          };
-        });
-
-        list.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || 0;
-          const bTime = b.createdAt?.toMillis?.() || 0;
-          // Within the same severity, serve the oldest waiting case first.
-      return aTime - bTime;
-        });
-
-        setFieldReports(list);
-      },
-      (error) => {
-        console.log("Volunteer field report listener error:", error);
-        Alert.alert(
-          "Permission Error",
-          "Unable to load Volunteer field reports. Check the deployed Firestore rules."
-        );
-      }
-    );
-  }, [isAuthorized]);
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -1680,13 +1633,6 @@ export default function AdminCases() {
     const skillMatches = skillMatchCount(incident, volunteer);
     const skillMatched = specializedSkills.length === 0 || skillMatches > 0;
 
-    const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
-    const volunteerBarangay = normalizeBarangay(volunteer.barangay);
-    const sameBarangay =
-      Boolean(caseBarangay) &&
-      Boolean(volunteerBarangay) &&
-      caseBarangay === volunteerBarangay;
-
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1695,19 +1641,6 @@ export default function AdminCases() {
     }
     if (explicitlyBlockedAccount || explicitlyRejectedIdentity) {
       return { eligible: false, reason: "Volunteer account is not currently eligible", skillMatches };
-    }
-    if (!caseBarangay) {
-      return { eligible: false, reason: "Emergency case barangay is missing", skillMatches };
-    }
-    if (!volunteerBarangay) {
-      return { eligible: false, reason: "Volunteer profile has no barangay", skillMatches };
-    }
-    if (!sameBarangay) {
-      return {
-        eligible: false,
-        reason: `Volunteer belongs to ${volunteer.barangay || "another barangay"}`,
-        skillMatches,
-      };
     }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
@@ -1734,7 +1667,6 @@ export default function AdminCases() {
   };
 
   const volunteerCandidatesForCase = (incident: DisasterCase) => {
-    const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
 
     return approvedVolunteers
       .filter((volunteer) => {
@@ -1762,8 +1694,7 @@ export default function AdminCases() {
         const eligibilityA = volunteerEligibilityForCase(incident, a);
         const eligibilityB = volunteerEligibilityForCase(incident, b);
 
-        // Prefer local, eligible volunteers, but show approved out-of-barangay
-        // profiles as well so admins understand why a candidate is restricted.
+        // Prefer approved, skill-matched volunteers without barangay matching.
         if (eligibilityA.eligible !== eligibilityB.eligible) {
           return eligibilityB.eligible ? 1 : -1;
         }
@@ -2111,6 +2042,27 @@ export default function AdminCases() {
         "Finish or cancel any active Volunteer tasks before resolving the case."
       );
       return;
+    }
+
+    if (nextStatus === "resolved") {
+      // Volunteer task completion does NOT establish that the Resident was
+      // helped. When an emergency has a completed Volunteer response, the
+      // Resident must separately confirm FULL assistance before Admin resolves.
+      // Partially Helped and Not Helped remain open for follow-up/dispute.
+      const completedSupport = assignmentsForCase(incident.id).filter(
+        (item) => String(item.status) === "completed",
+      );
+      if (completedSupport.some(
+        (item) =>
+          item.residentConfirmationStatus !== "resident_confirmed" ||
+          item.residentConfirmationOutcome !== "fully_helped",
+      )) {
+        Alert.alert(
+          "Resident Confirmation Required",
+          "The Resident must confirm Fully Helped before the case can be resolved. Partial or disputed assistance requires follow-up.",
+        );
+        return;
+      }
     }
 
     try {
@@ -3045,44 +2997,6 @@ export default function AdminCases() {
 
         const currentCase: any = caseSnapshot.data();
         const currentVolunteer: any = volunteerSnapshot.data();
-
-        const currentCaseBarangayRaw = String(
-          currentCase.incidentBarangay ||
-            currentCase.emergencyBarangay ||
-            currentCase.barangay ||
-            currentCase.reporterBarangay ||
-            ""
-        ).trim();
-        const currentCaseBarangay = normalizeBarangay(
-          currentCaseBarangayRaw
-        );
-        const currentVolunteerBarangay = normalizeBarangay(
-          currentVolunteer.barangay ||
-            currentVolunteer.addressBarangay ||
-            ""
-        );
-
-        if (!currentCaseBarangay) {
-          throw new Error(
-            "This emergency case has no barangay. Add or verify the case barangay before requesting local Volunteer support."
-          );
-        }
-
-        if (!currentVolunteerBarangay) {
-          throw new Error(
-            "This Volunteer profile has no barangay. Update the Volunteer profile before assigning local emergency support."
-          );
-        }
-
-        if (currentVolunteerBarangay !== currentCaseBarangay) {
-          throw new Error(
-            `${volunteer.fullName} is registered in ${
-              volunteer.barangay || "another barangay"
-            } and cannot be assigned to this ${
-              currentCaseBarangayRaw || "case"
-            } emergency.`
-          );
-        }
 
         if (responderLockSnapshot.exists()) {
           const lock: any = responderLockSnapshot.data();
@@ -5740,11 +5654,12 @@ export default function AdminCases() {
                 <ReferenceVolunteerMatching
                   incident={incident}
                   verificationStatus={verificationStatus}
-                  caseBarangay={barangayDisplay(caseBarangayValue(incident))}
+                  caseBarangay=""
                   eligibleCount={eligibleVolunteerCount}
                   activeAssignments={activeAssignments}
                   allAssignments={incidentAssignments}
-                  automaticStatus={incident.autoVolunteerDispatch?.state}
+                  automaticStatus="off"
+                  manualOnly
                   onCancelAssignment={(item) => {
                     const savedAssignment = activeAssignments.find(
                       (assignment) => assignment.id === item.id,
@@ -5759,22 +5674,20 @@ export default function AdminCases() {
                 <VolunteerEligibilityValidation
                   rows={approvedVolunteers.map((volunteer) => {
                     const result = volunteerEligibilityForCase(incident, volunteer);
-                    const incidentBarangay = normalizeBarangay(caseBarangayValue(incident));
-                    const local = Boolean(incidentBarangay) &&
-                      normalizeBarangay(volunteer.barangay) === incidentBarangay;
                     return {
                       id: volunteer.uid,
                       name: volunteer.fullName,
                       barangay: barangayDisplay(volunteer.barangay),
                       eligible: result.eligible,
                       reason: result.reason,
-                      inCaseBarangay: local,
+                      inCaseBarangay: false,
                     };
                   })}
                   loaded={volunteerDirectoryState !== "loading"}
                   failed={volunteerDirectoryState === "error"}
-                  caseBarangay={barangayDisplay(caseBarangayValue(incident))}
+                  caseBarangay=""
                   isValidated={dispatchReady}
+                  manualOnly
                 />
               )}
               {detailTab === "personnel" && dispatchReady &&
@@ -5786,12 +5699,12 @@ export default function AdminCases() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.personnelCleanTitle}>Available Qualified Volunteers</Text>
                         <Text style={styles.personnelCleanSubtitle}>
-                          Send an offer to an approved local Volunteer. A Volunteer must accept before starting a task.
+                          Select an approved qualified Volunteer anywhere in SJDM. Every task offer requires Accept or Decline.
                         </Text>
                       </View>
                     </View>
                     <View style={styles.personnelVolunteerToolbar}>
-                      <Text style={styles.personnelListHeading}>Local Volunteers</Text>
+                      <Text style={styles.personnelListHeading}>Approved Volunteers</Text>
                       <View style={styles.personnelVolunteerFilters}>
                         <TextInput
                           style={styles.personnelCompactFilter}
@@ -5811,7 +5724,7 @@ export default function AdminCases() {
                     </View>
                     {eligibleVolunteerCandidates.length === 0 ? (
                       <Text style={styles.personnelCleanEmptyText}>
-                        No qualified Volunteers match the current search filters. Clear the filters to see available local Volunteers.
+                        No qualified Volunteers match the current search filters. Clear the filters to see all approved qualified Volunteers.
                       </Text>
                     ) : (
                       <View style={styles.personnelCompactList}>
@@ -5850,7 +5763,7 @@ export default function AdminCases() {
                                 <View style={styles.personnelCompactIdentity}>
                                   <Text style={styles.personnelCompactName}>{volunteer.fullName}</Text>
                                   <Text style={styles.personnelCompactMeta}>
-                                    {barangayDisplay(volunteer.barangay)}
+                                    Approved Volunteer · SJDM
                                   </Text>
                                 </View>
 
@@ -5925,336 +5838,7 @@ export default function AdminCases() {
                 />
               )}
 
-              {false && incidentFieldReports.length > 0 && (
-                <View style={styles.fieldReportsSection}>
-                  <View style={styles.sectionHeader}>
-                    <View>
-                      <Text style={styles.sectionEyebrow}>
-                        VOLUNTEER → LGU FIELD REPORT
-                      </Text>
-                      <Text style={styles.sectionTitle}>
-                        Ground Situation & Remaining Needs
-                      </Text>
-                    </View>
 
-                    <Text style={styles.volunteerCount}>
-                      {incidentFieldReports.length} report
-                      {incidentFieldReports.length === 1 ? "" : "s"}
-                    </Text>
-                  </View>
-
-                  <View style={styles.fieldAuthorityNotice}>
-                    <Text style={styles.fieldAuthorityTitle}>
-                      Volunteer reports are operational input — not final LGU findings.
-                    </Text>
-                    <Text style={styles.fieldAuthorityText}>
-                      Admin/LGU reviews the on-ground report first. Only verified remaining
-                      needs are incorporated into an official Community Relief assessment.
-                    </Text>
-                  </View>
-
-                  {incidentFieldReports.map((report) => {
-                    const reportStatus = String(report.reportStatus || "submitted");
-                    const noteValue =
-                      fieldReportNotes[report.id] ?? report.adminReviewNote ?? "";
-                    const canReview = ["submitted", "reviewed"].includes(
-                      reportStatus
-                    );
-                    const draftOpen = needDraftReportId === report.id;
-                    const draft =
-                      needDrafts[report.id] || emptyNeedDraft(incident, report);
-                    const reviewBusy =
-                      busyKey === `field_reviewed_${report.id}` ||
-                      busyKey === `field_dismissed_${report.id}` ||
-                      busyKey === `incorporate_${report.id}`;
-
-                    return (
-                      <View key={report.id} style={styles.fieldReportCard}>
-                        <View style={styles.fieldReportTopRow}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.fieldVolunteerName}>
-                              {report.volunteerName || "Volunteer"}
-                            </Text>
-                            <Text style={styles.fieldReportMeta}>
-                              Submitted {formatDate(report.createdAt)} · Assignment {report.assignmentId}
-                            </Text>
-                          </View>
-
-                          <View
-                            style={[
-                              styles.fieldReportStatus,
-                              reportStatus === "incorporated"
-                                ? styles.fieldStatusIncorporated
-                                : reportStatus === "dismissed"
-                                ? styles.fieldStatusDismissed
-                                : reportStatus === "reviewed"
-                                ? styles.fieldStatusReviewed
-                                : styles.fieldStatusSubmitted,
-                            ]}
-                          >
-                            <Text style={styles.fieldReportStatusText}>
-                              {labelOfStatus(reportStatus)}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.fieldReportGrid}>
-                          <View style={styles.fieldReportInfoCard}>
-                            <Text style={styles.metaLabel}>Situation Observed</Text>
-                            <Text style={styles.fieldReportValue}>
-                              {report.situationSummary || "No situation summary."}
-                            </Text>
-                          </View>
-
-                          <View style={styles.fieldReportInfoCard}>
-                            <Text style={styles.metaLabel}>Assistance Provided</Text>
-                            <Text style={styles.fieldReportValue}>
-                              {report.assistanceProvided || "No assistance summary."}
-                            </Text>
-                          </View>
-
-                          <View style={styles.fieldReportInfoCard}>
-                            <Text style={styles.metaLabel}>People Helped</Text>
-                            <Text style={styles.fieldReportValue}>
-                              {report.peopleHelped}
-                            </Text>
-                          </View>
-
-                          <View style={styles.fieldReportInfoCard}>
-                            <Text style={styles.metaLabel}>LGU Follow-up</Text>
-                            <Text style={styles.fieldReportValue}>
-                              {report.lguFollowUpRequired ? "Required" : "Not flagged"}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.remainingNeedsBox}>
-                          <Text style={styles.metaLabel}>REPORTED REMAINING NEEDS</Text>
-                          <Text style={styles.remainingNeedsText}>
-                            {report.remainingNeeds.length
-                              ? report.remainingNeeds.join(" · ")
-                              : "No category selected"}
-                          </Text>
-                          {!!report.remainingNeedsNote && (
-                            <Text style={styles.remainingNeedsNote}>
-                              {report.remainingNeedsNote}
-                            </Text>
-                          )}
-                        </View>
-
-                        {canReview && (
-                          <>
-                            <Text style={styles.controlLabel}>LGU/Admin review note</Text>
-                            <TextInput
-                              style={[styles.input, styles.fieldReviewInput]}
-                              multiline
-                              maxLength={1500}
-                              value={noteValue}
-                              placeholder="Verification note, field coordination, or reason for dismissal…"
-                              onChangeText={(value) =>
-                                setFieldReportNotes((current) => ({
-                                  ...current,
-                                  [report.id]: value,
-                                }))
-                              }
-                            />
-
-                            <View style={styles.fieldReportActions}>
-                              {reportStatus === "submitted" && (
-                                <TouchableOpacity
-                                  disabled={reviewBusy}
-                                  style={[
-                                    styles.reviewFieldButton,
-                                    reviewBusy && styles.disabledButton,
-                                  ]}
-                                  onPress={() =>
-                                    reviewVolunteerFieldReport(report, "reviewed")
-                                  }
-                                >
-                                  <Text style={styles.primaryButtonText}>
-                                    Mark Reviewed
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-
-                              <TouchableOpacity
-                                disabled={reviewBusy}
-                                style={[
-                                  styles.incorporateButton,
-                                  reviewBusy && styles.disabledButton,
-                                ]}
-                                onPress={() => openNeedDraft(incident, report)}
-                              >
-                                <Text style={styles.incorporateButtonText}>
-                                  {draftOpen
-                                    ? "Hide Community Relief Form"
-                                    : "Prepare Community Relief"}
-                                </Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                disabled={reviewBusy}
-                                style={[
-                                  styles.dismissFieldButton,
-                                  reviewBusy && styles.disabledButton,
-                                ]}
-                                onPress={() =>
-                                  reviewVolunteerFieldReport(report, "dismissed")
-                                }
-                              >
-                                <Text style={styles.dismissFieldButtonText}>
-                                  Dismiss
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </>
-                        )}
-
-                        {draftOpen && canReview && (
-                          <View style={styles.needAssessmentPanel}>
-                            <Text style={styles.needAssessmentEyebrow}>
-                              LGU VERIFIED COMMUNITY RELIEF
-                            </Text>
-                            <Text style={styles.needAssessmentTitle}>
-                              {incident.reporterBarangay || report.barangay || "Barangay"}
-                            </Text>
-                            <Text style={styles.needAssessmentHint}>
-                              Do not copy the Volunteer report blindly. Enter only quantities
-                              verified by LGU/Admin assessment.
-                            </Text>
-
-                            <View style={styles.needInputGrid}>
-                              <View style={styles.needInputBlock}>
-                                <Text style={styles.controlLabel}>Affected households *</Text>
-                                <TextInput
-                                  style={styles.input}
-                                  keyboardType="number-pad"
-                                  value={draft.affectedHouseholds}
-                                  onChangeText={(value) =>
-                                    updateNeedDraft(
-                                      report.id,
-                                      "affectedHouseholds",
-                                      value.replace(/[^0-9]/g, "").slice(0, 7)
-                                    )
-                                  }
-                                  placeholder="e.g. 12"
-                                />
-                              </View>
-
-                              <View style={styles.needInputBlock}>
-                                <Text style={styles.controlLabel}>Affected people *</Text>
-                                <TextInput
-                                  style={styles.input}
-                                  keyboardType="number-pad"
-                                  value={draft.affectedPeople}
-                                  onChangeText={(value) =>
-                                    updateNeedDraft(
-                                      report.id,
-                                      "affectedPeople",
-                                      value.replace(/[^0-9]/g, "").slice(0, 8)
-                                    )
-                                  }
-                                  placeholder="e.g. 48"
-                                />
-                              </View>
-
-                              {([
-                                ["peopleNeedingFood", "People needing food"],
-                                ["peopleNeedingWater", "People needing water"],
-                                ["peopleNeedingClothing", "People needing clothing"],
-                                ["peopleNeedingMedical", "People needing medical support"],
-                                ["householdsNeedingShelter", "Households needing shelter"],
-                                ["householdsNeedingHygiene", "Households needing hygiene kits"],
-                              ] as [keyof BarangayNeedDraft, string][]).map(
-                                ([field, label]) => (
-                                  <View key={field} style={styles.needInputBlock}>
-                                    <Text style={styles.controlLabel}>{label}</Text>
-                                    <TextInput
-                                      style={styles.input}
-                                      keyboardType="number-pad"
-                                      value={draft[field]}
-                                      onChangeText={(value) =>
-                                        updateNeedDraft(
-                                          report.id,
-                                          field,
-                                          value.replace(/[^0-9]/g, "").slice(0, 8)
-                                        )
-                                      }
-                                      placeholder="0"
-                                    />
-                                  </View>
-                                )
-                              )}
-                            </View>
-
-                            <Text style={styles.controlLabel}>Other verified need / details</Text>
-                            <TextInput
-                              style={[styles.input, styles.needMultiline]}
-                              multiline
-                              maxLength={1000}
-                              value={draft.otherNeedDescription}
-                              onChangeText={(value) =>
-                                updateNeedDraft(
-                                  report.id,
-                                  "otherNeedDescription",
-                                  value
-                                )
-                              }
-                              placeholder="Other verified recovery need, item details, or special requirement…"
-                            />
-
-                            <Text style={styles.controlLabel}>LGU assessment note</Text>
-                            <TextInput
-                              style={[styles.input, styles.needMultiline]}
-                              multiline
-                              maxLength={1500}
-                              value={draft.adminNote}
-                              onChangeText={(value) =>
-                                updateNeedDraft(report.id, "adminNote", value)
-                              }
-                              placeholder="How LGU verified these quantities…"
-                            />
-
-                            <TouchableOpacity
-                              disabled={reviewBusy}
-                              style={[
-                                styles.saveBarangayNeedButton,
-                                reviewBusy && styles.disabledButton,
-                              ]}
-                              onPress={() =>
-                                incorporateFieldReportIntoBarangayNeeds(
-                                  incident,
-                                  report
-                                )
-                              }
-                            >
-                              <Text style={styles.primaryButtonText}>
-                                Verify & Add to Community Relief
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
-
-                        {reportStatus === "incorporated" && (
-                          <View style={styles.fieldFinalNotice}>
-                            <Text style={styles.fieldFinalNoticeText}>
-                              ✓ LGU verified and incorporated this report into Community Relief.
-                            </Text>
-                          </View>
-                        )}
-
-                        {reportStatus === "dismissed" && (
-                          <View style={styles.fieldDismissedNotice}>
-                            <Text style={styles.fieldDismissedNoticeText}>
-                              This field report was reviewed but not incorporated into official Community Relief.
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
             </View>
           );
         })}
