@@ -4,6 +4,7 @@ on:
     branches: [qa/restore-trusted-automatic-identity-20261125]
     paths:
       - backend/test-identityRealFirestoreEmulator.js
+      - backend/test-identityRealFirebaseAuthEmulator.js
       - backend/server.js
       - backend/qa-identity-firestore-emulator.json
       - backend/qa-identity-firestore-emulator.rules
@@ -19,6 +20,7 @@ jobs:
       CI: "true"
       GCLOUD_PROJECT: demo-volunserve-trusted-auto-only
       FIRESTORE_EMULATOR_HOST: 127.0.0.1:8180
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9199
       FIREBASE_PROJECT_ID: demo-volunserve-trusted-auto-only
       GOOGLE_CLOUD_PROJECT: demo-volunserve-trusted-auto-only
       FIREBASE_CONFIG: '{"projectId":"demo-volunserve-trusted-auto-only"}'
@@ -42,6 +44,7 @@ jobs:
         run: |
           set -eu
           node --check backend/test-identityRealFirestoreEmulator.js
+          node --check backend/test-identityRealFirebaseAuthEmulator.js
           node --check backend/server.js
           node <<'JS'
           const assert=require("node:assert/strict");
@@ -50,6 +53,9 @@ jobs:
           assert.equal(process.env.GCLOUD_PROJECT,p);
           assert.equal(process.env.FIREBASE_PROJECT_ID,p);
           assert.equal(process.env.FIRESTORE_EMULATOR_HOST,"127.0.0.1:8180");
+          assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST,"127.0.0.1:9199");
+          assert.equal(f.emulators.auth.host,"127.0.0.1");
+          assert.equal(f.emulators.auth.port,9199);
           assert.equal(f.emulators.firestore.host,"127.0.0.1");
           assert.equal(f.emulators.firestore.port,8180);
           assert.equal(f.firestore.rules,"qa-identity-firestore-emulator.rules");
@@ -67,11 +73,11 @@ jobs:
           set -euo pipefail
           npm exec --yes --package=firebase-tools@15.37.0 -- \
             firebase emulators:exec \
-            --only firestore \
+            --only auth,firestore \
             --project demo-volunserve-trusted-auto-only \
             --config backend/qa-identity-firestore-emulator.json \
-            "node backend/test-identityRealFirestoreEmulator.js"
-          echo "PASS: actual emulator reads, transactions, concurrency and Resident status"
+            "node --test backend/test-identityRealFirestoreEmulator.js && node --test backend/test-identityRealFirebaseAuthEmulator.js"
+          echo "PASS: real Firestore transactions and real Auth tokens through production middleware and Resident status"
       - name: Prove no deployment was attempted
         run: |
           echo "NO DEPLOY: No Firebase production project, external credentials, Hosting, Render or Cloudinary used"
