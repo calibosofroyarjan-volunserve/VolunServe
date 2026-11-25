@@ -28,7 +28,7 @@ function proof(kind,modifications={},key){
         successField:"livePersonConfirmed",signer:pad.privateKey};
   const p={
     iss:spec.name,aud:"volunserve-trusted-identity-v1",sub:uid,
-    verificationId,requestId,proofType:kind,proofKind:spec.proofKind,
+    verificationId,requestId,documentType:"national_id",proofType:kind,proofKind:spec.proofKind,
     jti:"syntheticSignedProof123",iat:nowSeconds-3,exp:nowSeconds+90,
     [spec.successField]:true,...modifications,
   };
@@ -41,7 +41,7 @@ const params=(kind,token,overrides={})=>({
   keyPem:keyPem(kind==="issuer"?issuer:pad),
   expectedIssuer:kind==="issuer"?issuerName:padName,
   expectedKeyId:kind==="issuer"?issuerKeyId:padKeyId,
-  uid,verificationId,requestId,nowMs,...overrides
+  uid,verificationId,requestId,documentType:"national_id",nowMs,...overrides
 });
 const screening={
   status:"text_consistent_unverified",
@@ -57,7 +57,7 @@ const attempt={uid,verificationId,freshCapture:true,consentedEvidenceAvailable:t
 function validators(overrides={}){
   return createTrustedSignedValidators({
     issuerToken:proof("issuer"),padToken:proof("pad"),
-    uid,verificationId,requestId,issuerKeyPem:keyPem(issuer),
+    uid,verificationId,requestId,documentType:"national_id",issuerKeyPem:keyPem(issuer),
     padKeyPem:keyPem(pad),issuerName,padName,
     issuerKeyId,padKeyId,nowMs,...overrides
   });
@@ -117,6 +117,7 @@ badClaim("user from another account cannot be verified","issuer",{sub:"different
 badClaim("previous verification cannot be replayed","issuer",{verificationId:"previousVerification123"});
 badClaim("previous camera capture nonce cannot be replayed","issuer",{requestId:"previousRequest123"});
 badClaim("wrong audience rejected","issuer",{aud:"another-app"});
+badClaim("National ID proof cannot authorize an unrelated ID type","issuer",{documentType:"passport"});
 badClaim("unsupported proof kind rejected","issuer",{proofKind:"self_reported"});
 badClaim("issuer attestation must actually confirm genuine ID","issuer",{documentGenuine:false});
 badClaim("PAD must explicitly confirm live person","pad",{livePersonConfirmed:false});
