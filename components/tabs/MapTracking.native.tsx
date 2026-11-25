@@ -205,6 +205,8 @@ export default function MapTracking() {
   }, [sjdmBoundary,lguFacilities]);
   const [liveLguPins, setLiveLguPins] = useState<Record<string, RealLguGps>>({});
   const [residentVolunteerGps, setResidentVolunteerGps] = useState<ResidentVolunteerGps | null>(null);
+  const [residentVolunteerGpsError, setResidentVolunteerGpsError] = useState(false);
+  const [emergencyGpsPublishError, setEmergencyGpsPublishError] = useState(false);
   const [gpsClock, setGpsClock] = useState(Date.now());
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -334,6 +336,7 @@ export default function MapTracking() {
 
   useEffect(() => {
     setResidentVolunteerGps(null);
+    setResidentVolunteerGpsError(false);
     if (!CURRENT_USER_ID || userRole !== "resident" ||
         !focusedCaseId || !trackedVolunteerAssignmentId) return;
 
@@ -347,6 +350,7 @@ export default function MapTracking() {
       doc(db, "responseAssignments", trackedVolunteerAssignmentId),
       assignmentSnapshot => {
         clearGps();
+        setResidentVolunteerGpsError(false);
         if (!assignmentSnapshot.exists()) return;
         const assignment = assignmentSnapshot.data();
         if (assignment.caseId !== focusedCaseId ||
@@ -381,10 +385,16 @@ export default function MapTracking() {
               updatedAt: gps.updatedAt,
             } : null);
           },
-          () => setResidentVolunteerGps(null),
+          () => {
+            setResidentVolunteerGps(null);
+            setResidentVolunteerGpsError(true);
+          },
         );
       },
-      () => clearGps(),
+      () => {
+        clearGps();
+        setResidentVolunteerGpsError(true);
+      },
     );
     return () => {
       stopAssignment();
@@ -1057,7 +1067,9 @@ export default function MapTracking() {
                 accuracy: typeof coords.accuracy === "number" ? coords.accuracy : null,
                 updatedAt: serverTimestamp(),
               });
+              setEmergencyGpsPublishError(false);
             } catch (error) {
+              setEmergencyGpsPublishError(true);
               console.log("Case-specific Volunteer GPS publish error:", error);
               // Keep the last-known map position; never invent live tracking.
             }
@@ -1556,6 +1568,11 @@ export default function MapTracking() {
                     ? "GPS accuracy too low for the 100 m indicator. Confirm arrival manually."
                     : "Waiting for a fresh GPS reading and valid incident pin."}
           </Text>
+          {emergencyGpsPublishError && (
+            <Text style={{fontSize:11,color:"#B91C1C",marginTop:4}}>
+              Volunteer GPS could not be shared. Check network or deployed Firestore permissions; the Resident may not see this location.
+            </Text>
+          )}
           <Text style={{fontSize:11,color:"#47675C",marginTop:3}}>
             Proximity is informational only, not proof that assistance was delivered. Resident confirms help separately.
           </Text>
@@ -1568,7 +1585,9 @@ export default function MapTracking() {
           <Text style={{fontSize:12,fontWeight:"700",color:"#14532D"}}>
             {visibleResidentVolunteerGps
               ? `Assigned Volunteer GPS · updated ${new Date(visibleResidentVolunteerGps.lastUpdate).toLocaleTimeString("en-PH")}`
-              : "Waiting for the assigned Volunteer's active, recent GPS location"}
+              : residentVolunteerGpsError
+                ? "Assigned Volunteer GPS unavailable. Check connection or Firestore permissions."
+                : "Waiting for the assigned Volunteer's active, recent GPS location"}
           </Text>
           <Text style={{fontSize:11,color:"#47675C",marginTop:3}}>
             Only Responding/On Site locations are shared. Pin is last reported GPS, not verified arrival or guaranteed road ETA.
