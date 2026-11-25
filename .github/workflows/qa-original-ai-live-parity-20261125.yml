@@ -108,3 +108,135 @@ jobs:
           python -m unittest -v test_document_screening test_profile_consistency
 # Source-only QA: does not set secrets, call deployed APIs, upload media,
 # deploy services, access real users, or write to Firebase/Cloudinary.
+
+  runtime:
+    name: Original AI actual MediaPipe Tesseract synthetic HTTP smoke (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch exact current deployed Python AI files without checkout
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs');
+            const path=require('path');
+            const {owner,repo}=context.repo;
+            const ref='319152e6a1cad5e54653c20e87bd1551a82b219e';
+            const files=[
+              'main.py','document_screening.py','profile_consistency.py',
+              'face_boxes.py','requirements.txt',
+              'test_ai_runtime_smoke.py','test_synthetic_document_pipeline.py',
+              'test_document_precheck.py','test_face_box_dedup.py'
+            ];
+            const target=path.join(process.env.GITHUB_WORKSPACE,'live-ai','identity-ai');
+            fs.mkdirSync(target,{recursive:true});
+            for(const filename of files){
+              const {data}=await github.rest.repos.getContent({owner,repo,path:'identity-ai/'+filename,ref});
+              if(Array.isArray(data)||data.encoding!=='base64') throw new Error('Unable to read deployed AI file '+filename);
+              fs.writeFileSync(path.join(target,filename),Buffer.from(data.content,'base64'));
+              core.info('Pinned live source: '+filename);
+            }
+      - name: Install runtime libraries and Tesseract in ephemeral runner only
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends tesseract-ocr libgl1 libglib2.0-0 libgomp1
+          python -m pip install --disable-pip-version-check -r live-ai/identity-ai/requirements.txt
+      - name: Run actual MediaPipe face mesh plus synthetic image OCR and route tests
+        working-directory: live-ai/identity-ai
+        env:
+          FIREBASE_AUTH_EMULATOR_HOST: ''
+          FIRESTORE_EMULATOR_HOST: ''
+          IDENTITY_AI_INTERNAL_KEY: local-qa-only-nonsecret
+        run: |
+          python -m unittest -v \
+            test_ai_runtime_smoke \
+            test_synthetic_document_pipeline \
+            test_document_precheck \
+            test_face_box_dedup
+      - name: Test localhost HTTP precheck with synthetic demo cards and authorization
+        working-directory: live-ai/identity-ai
+        env:
+          IDENTITY_AI_INTERNAL_KEY: local-qa-only-nonsecret
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys, time, urllib.request, urllib.error
+          from test_synthetic_document_pipeline import synthetic_photo, NATIONAL_SAMPLE, BACK_SIDE_SAMPLE, SCHOOL_SAMPLE
+          from io import BytesIO
+          from PIL import Image
+
+          base='http://127.0.0.1:18765'
+          proc=subprocess.Popen([sys.executable,'-m','uvicorn','main:app','--host','127.0.0.1','--port','18765','--no-access-log'],
+                                env=os.environ.copy(),stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+          def send(url, data=None, headers=None):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(base+url,data=data,headers=headers or {}),
+                                              timeout=60) as resp:
+                      return resp.status, json.loads(resp.read())
+              except urllib.error.HTTPError as error:
+                  raw=error.read()
+                  try: parsed=json.loads(raw)
+                  except ValueError: parsed={'detail':'nonjson'}
+                  return error.code, parsed
+
+          def payload(front,back):
+              boundary='OriginalAiSyntheticNoRealIDs'
+              parts=[]
+              for field,value in [
+                  ('idType','national_id'),
+                  ('idDocument',front),
+                  ('idBackDocument',back),
+              ]:
+                  is_file=isinstance(value,bytes)
+                  header=('Content-Disposition: form-data; name="'+field+'"'
+                          + ('; filename="synthetic-demo.png"\r\nContent-Type: image/png' if is_file else ''))
+                  raw=value if is_file else value.encode()
+                  parts.append(('--'+boundary+'\r\n'+header+'\r\n\r\n').encode()+raw+b'\r\n')
+              return b''.join(parts)+('--'+boundary+'--\r\n').encode(),boundary
+
+          try:
+              for attempt in range(40):
+                  try:
+                      code,body=send('/health')
+                      if code==200: break
+                  except Exception:
+                      time.sleep(0.5)
+              else: raise AssertionError('QA localhost service never started')
+              assert body.get('verificationEngineReady') is True, 'MediaPipe not loaded'
+              assert body.get('documentOcrReady') is True, 'Tesseract not ready'
+              code,body=send('/api/internal/auth-check')
+              assert code==401, 'Private API must reject request without internal key'
+              front,_=synthetic_photo(NATIONAL_SAMPLE)
+              back,_=synthetic_photo(BACK_SIDE_SAMPLE)
+              school,_=synthetic_photo(SCHOOL_SAMPLE)
+              h={'X-VolunServe-User-Id':'synthetic-qa-user',
+                 'X-VolunServe-Internal-Key':'local-qa-only-nonsecret',
+                 'X-VolunServe-Profile-First-Name':'TEST',
+                 'X-VolunServe-Profile-Last-Name':'SAMPLE'}
+              body_bytes,boundary=payload(front,back)
+              headers={**h,'Content-Type':'multipart/form-data; boundary='+boundary}
+              code,body=send('/document/precheck',body_bytes,headers)
+              assert code==200, ('synthetic precheck returned status', code)
+              assert body.get('outcome')=='pass', 'Synthetic clear document failed ID-only precheck'
+              assert body.get('authenticityVerified') is False
+              assert body.get('livenessVerified') is False
+              print('PASS: localhost synthetic ID OCR precheck, no auto verification')
+              body_bytes,boundary=payload(school,back)
+              headers={**h,'Content-Type':'multipart/form-data; boundary='+boundary}
+              code,body=send('/document/precheck',body_bytes,headers)
+              assert code==200, ('synthetic school ID returned status',code)
+              assert body.get('outcome')!='pass', 'School ID was incorrectly accepted'
+              assert 'school_id_not_supported' in body['documentScreening']['warningCodes']
+              print('PASS: localhost synthetic school ID rejected')
+              code,body=send('/document/precheck',body_bytes,{'Content-Type':'multipart/form-data; boundary='+boundary})
+              assert code==401, 'Private precheck accepted anonymous request'
+              print('PASS: private precheck rejects unauthenticated client')
+          finally:
+              proc.terminate()
+              try: proc.wait(timeout=10)
+              except subprocess.TimeoutExpired: proc.kill()
+          PY
+# All test identities and ID images are fabricated in RAM; localhost only,
+# no API calls to deployed Render, no Cloudinary upload or Firebase usage.
