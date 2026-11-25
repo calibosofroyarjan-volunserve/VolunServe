@@ -61,11 +61,11 @@ test("Resident and Volunteer screens never trigger automatic Volunteer fan-out",
   assert.match(admin,/automaticStatus="off"/);
 });
 
-test("pinned deployed Render auto-invite controller stays off without explicit production approvals",()=>{
-  // Read the exact commit reported as live by Render. Do not use production
+test("latest observed deployed Render auto-invite controller stays off without explicit production approvals",()=>{
+  // Read the latest read-only Render live deploy commit (2026-11-25). Do not use production
   // credentials, modify env settings, or call any actual API endpoints.
   const {execFileSync}=require("node:child_process");
-  const release="4308ff0eef985dcd0777c96906e61540bb9d7fd2";
+  const release="d3308da6107f517061f5022997a229de9d05a0cb";
   const source=execFileSync("git",["show",release+":backend/renderEmergencyAutoInvites.js"],{
     encoding:"utf8",timeout:20000,maxBuffer:1024*1024
   });
