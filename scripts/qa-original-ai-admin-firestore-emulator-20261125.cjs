@@ -7,6 +7,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const {Writable} = require("node:stream");
 
 const EXPECTED_PROJECT = "demo-volunserve-original-ai-admin-qa";
 if (process.env.GCLOUD_PROJECT !== EXPECTED_PROJECT &&
@@ -40,6 +41,46 @@ const {isVerifiedFirebaseToken,isCompletedVolunServeProfile} =
 const {isOperationalAdminProfile} = require("./backend/adminAccess");
 const {selectedIdRecognized} = require("./backend/selectedIdPolicy");
 const {reviewIssuerEvidence} = require("./backend/identityIssuerReviewPolicy");
+const {
+  parseConsentedIdentityEvidence,uploadIdentityEvidence,
+  signedIdentityEvidence,identityEvidenceRetentionDate,
+} = require("./backend/identityPrivateEvidence");
+const evidenceStorage=new Map();
+const evidenceSignings=[];
+const cloudinary={
+  uploader:{
+    upload_stream(options,callback){
+      const chunks=[];
+      return new Writable({
+        write(chunk,_encoding,next){chunks.push(Buffer.from(chunk));next();},
+        final(next){
+          // Never upload beyond local memory, don't log media contents.
+          assert.equal(options.type,"authenticated");
+          assert.equal(options.overwrite,false);
+          const bytes=Buffer.concat(chunks);
+          assert.ok(bytes.length>16);
+          evidenceStorage.set(options.public_id,{bytes,mime:"image/png"});
+          callback(null,{
+            asset_id:"synthetic-local-"+evidenceStorage.size,
+            public_id:options.public_id,format:"png"
+          });
+          next();
+        }
+      });
+    },
+  },
+  utils:{
+    private_download_url(publicId,format,opts){
+      assert.equal(opts.type,"authenticated");
+      assert.equal(opts.resource_type,"image");
+      assert.ok(opts.expires_at>Math.floor(Date.now()/1000));
+      evidenceSignings.push({publicId,expiresAt:opts.expires_at});
+      return "https://qa.invalid/private-signed/"+encodeURIComponent(publicId)+"."+format+
+        "?expires="+opts.expires_at;
+    }
+  }
+};
+function configureCloudinary(){ /* Fake only, no real service or credentials. */ }
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({limit:"16kb"}));
@@ -68,12 +109,15 @@ const modules=[
   section("function identityAttemptCount(","const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT"),
   section("function identityAdminTimestampIso(","app.get(\n  \"/api/admin/identity/reviews\""),
   getRoute("get","/api/admin/identity/reviews","/api/admin/identity/reviews/:uid/evidence"),
+  getRoute("get","/api/admin/identity/reviews/:uid/evidence","/api/admin/identity/reviews/:uid/decision"),
   getRoute("post","/api/admin/identity/reviews/:uid/decision","/api/admin/assistance/requests/:requestId/start-review"),
 ];
 assert.ok(modules[7].includes("requireOperationalAdmin") &&
-          modules[8].includes("self_identity_review_forbidden") &&
-          modules[8].includes("reviewIssuerEvidence(") &&
-          modules[8].includes("db.runTransaction("),
+          modules[8].includes("signedIdentityEvidence({") &&
+          modules[8].includes("identity_evidence_expired") &&
+          modules[9].includes("self_identity_review_forbidden") &&
+          modules[9].includes("reviewIssuerEvidence(") &&
+          modules[9].includes("db.runTransaction("),
   "Refusing test of detached or substituted Admin logic");
 // Use the SAME JavaScript Promise realm as Firestore Admin SDK.
 // The Firestore SDK requires its transaction callback to return a native
@@ -81,13 +125,15 @@ assert.ok(modules[7].includes("requireOperationalAdmin") &&
 const dependencyNames=[
   "app","db","auth","FieldValue","console","MAX_IDENTITY_AI_ATTEMPTS",
   "isVerifiedFirebaseToken","isCompletedVolunServeProfile",
-  "isOperationalAdminProfile","selectedIdRecognized","reviewIssuerEvidence"
+  "isOperationalAdminProfile","selectedIdRecognized","reviewIssuerEvidence",
+  "signedIdentityEvidence","cloudinary","configureCloudinary"
 ];
 const installRoutes = new Function(...dependencyNames,modules.join("\n"));
 installRoutes(
   app,db,auth,FieldValue,console,3,
   isVerifiedFirebaseToken,isCompletedVolunServeProfile,
-  isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence
+  isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence,
+  signedIdentityEvidence,cloudinary,configureCloudinary
 );
 
 const adminUid="synthetic_admin_20261125";
@@ -150,7 +196,7 @@ async function call(method,url,token,body) {
     method,headers,body:body===undefined?undefined:JSON.stringify(body)
   });
   const payload=await response.json();
-  return {status:response.status,body:payload};
+  return {status:response.status,body:payload,cacheControl:response.headers.get("cache-control")};
 }
 const verifiedBody={
   action:"verify",
@@ -287,6 +333,143 @@ async function run() {
     assert.equal(audit.docs.filter(doc=>doc.data().residentUid===retryUid &&
       doc.data().action==="Resident Identity Retry Required").length,1);
     pass("Admin Verify/Reject/Retry decisions create exactly one audit record per case");
+
+
+    // Test the exact private evidence upload/signing library and the actual
+    // deployed Admin viewer route, not just isolated permission functions.
+    // The PNG bytes below are a fabricated blank pixel, not a face or ID.
+    const blankPng=Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9m9G0AAAAASUVORK5CYII=",
+      "base64"
+    );
+    assert.ok(blankPng.length>=16);
+    async function uploadSynthetic(uid,requestId,{includeSelfie=true}={}){
+      const form=new FormData();
+      form.set("idType","national_id");
+      form.set("identityEvidenceConsent","true");
+      for(const field of ["idDocument","idBackDocument",...(includeSelfie?["selfie"]:[])])
+        form.set(field,new Blob([blankPng],{type:"image/png"}),field+".png");
+      const req=new Request("http://127.0.0.1:7777/test-only",{method:"POST",body:form});
+      const body=Buffer.from(await req.arrayBuffer());
+      const images=await parseConsentedIdentityEvidence({
+        body,headers:{"content-type":req.headers.get("content-type")}
+      },{requireSelfie:includeSelfie});
+      assert.equal(Object.keys(images).length,includeSelfie?3:2);
+      const assets=await uploadIdentityEvidence({
+        images,uid,requestId,cloudinary,configureCloudinary
+      });
+      assert.deepEqual(Object.keys(assets),
+        includeSelfie?["front","back","selfie"]:["front","back"]);
+      return assets;
+    }
+    const evidenceUid="synthetic_evidence_main_20261125";
+    const requestId="synthetic_evidence_attempt_20261125";
+    await record(evidenceUid);
+    const uploaded=await uploadSynthetic(evidenceUid,requestId);
+    assert.equal(evidenceStorage.size,3);
+    await verificationRef(evidenceUid).update({privateEvidenceRequestId:requestId});
+    await db.collection("identityPrivateEvidence").doc(evidenceUid).set({
+      requestId,verificationId:"demo-verification-"+evidenceUid,
+      retentionUntil:FieldValue.serverTimestamp(),
+      assets:uploaded
+    });
+    await db.collection("identityPrivateEvidence").doc(evidenceUid).update({
+      retentionUntil: new Date(Date.now()+3*24*60*60*1000)
+    });
+    const evidenceRoute="/api/admin/identity/reviews/"+evidenceUid+"/evidence";
+    let seen=await call("GET",evidenceRoute,null);
+    assert.equal(seen.status,401,JSON.stringify(seen.body));
+    seen=await call("GET",evidenceRoute,residentToken);
+    assert.equal(seen.status,403,JSON.stringify(seen.body));
+    seen=await call("GET",evidenceRoute,pendingToken);
+    assert.equal(seen.status,403,JSON.stringify(seen.body));
+    pass("Real private evidence route blocks anonymous, Resident and unapproved Admin");
+
+    const accessCountBefore=(await db.collection("adminActivityLogs")
+      .where("action","==","Resident Identity Evidence Viewed").get()).size;
+    const signingCountBefore=evidenceSignings.length;
+    seen=await call("GET",evidenceRoute,adminToken);
+    assert.equal(seen.status,200,JSON.stringify(seen.body));
+    assert.equal(seen.body.ok,true);
+    assert.equal(seen.body.uid,evidenceUid);
+    assert.match(seen.cacheControl,/no-store/);
+    assert.match(seen.cacheControl,/private/);
+    for(const slot of ["front","back","selfie"])
+      assert.match(seen.body.images[slot],/^https:\/\/qa\.invalid\/private-signed\//);
+    assert.ok(seen.body.expiresAt>Math.floor(Date.now()/1000));
+    assert.ok(seen.body.expiresAt<=Math.floor(Date.now()/1000)+180);
+    assert.equal(evidenceSignings.length,signingCountBefore+3);
+    const viewLogs=(await db.collection("adminActivityLogs")
+      .where("action","==","Resident Identity Evidence Viewed").get());
+    assert.equal(viewLogs.size,accessCountBefore+1);
+    assert.ok(viewLogs.docs.some(d=>{
+      const v=d.data();
+      return v.residentUid===evidenceUid && v.performedBy===adminUid &&
+        !JSON.stringify(v).includes("qa.invalid");
+    }));
+    pass("Authorized Admin gets 3 private signed URLs expiring within 180 sec, no-store and audit");
+
+    const wrongUid="synthetic_missing_private_20261125";
+    await record(wrongUid);
+    seen=await call("GET","/api/admin/identity/reviews/"+wrongUid+"/evidence",adminToken);
+    assert.equal(seen.status,404);
+    assert.equal(seen.body.error,"identity_evidence_not_retained");
+    pass("Missing evidence rejected without signing assets");
+
+    await verificationRef(evidenceUid).update({
+      privateEvidenceRequestId:"synthetic_outdated_attempt_20261125"
+    });
+    const signBeforeMismatch=evidenceSignings.length;
+    seen=await call("GET",evidenceRoute,adminToken);
+    assert.equal(seen.status,404);
+    assert.equal(seen.body.error,"identity_evidence_not_retained");
+    assert.equal(evidenceSignings.length,signBeforeMismatch);
+    await verificationRef(evidenceUid).update({privateEvidenceRequestId:requestId});
+    pass("Stale or mismatched evidence request ID denied; no signed URLs issued");
+
+    await db.collection("identityPrivateEvidence").doc(evidenceUid).update({
+      retentionUntil:new Date(Date.now()-60*1000)
+    });
+    const signBeforeExpiry=evidenceSignings.length;
+    seen=await call("GET",evidenceRoute,adminToken);
+    assert.equal(seen.status,410,JSON.stringify(seen.body));
+    assert.equal(seen.body.error,"identity_evidence_expired");
+    assert.equal(evidenceSignings.length,signBeforeExpiry);
+    await db.collection("identityPrivateEvidence").doc(evidenceUid).update({
+      retentionUntil:new Date(Date.now()+3*24*60*60*1000)
+    });
+    pass("Expired evidence blocked HTTP 410 before signing a private URL");
+
+    const forged={...uploaded,
+      front:{...uploaded.front,publicId:"volunserve/assistance-evidence/forged/path"}};
+    await db.collection("identityPrivateEvidence").doc(evidenceUid).update({assets:forged});
+    seen=await call("GET",evidenceRoute,adminToken);
+    assert.equal(seen.status,409,JSON.stringify(seen.body));
+    assert.equal(seen.body.error,"identity_evidence_not_private");
+    await db.collection("identityPrivateEvidence").doc(evidenceUid).update({assets:uploaded});
+    pass("Tampered public asset path rejected by actual Cloudinary private signer");
+
+    const idOnlyUid="synthetic_evidence_ocr_20261125";
+    const idOnlyReq="synthetic_ocr_evidence_attempt_20261125";
+    await record(idOnlyUid,{method:"volunserve_ai_ocr_manual_review"});
+    const idOnlyAssets=await uploadSynthetic(idOnlyUid,idOnlyReq,{includeSelfie:false});
+    await verificationRef(idOnlyUid).update({privateEvidenceRequestId:idOnlyReq});
+    await db.collection("identityPrivateEvidence").doc(idOnlyUid).set({
+      requestId:idOnlyReq,verificationId:"demo-verification-"+idOnlyUid,
+      retentionUntil: new Date(Date.now()+24*60*60*1000),
+      assets:idOnlyAssets
+    });
+    seen=await call("GET","/api/admin/identity/reviews/"+idOnlyUid+"/evidence",adminToken);
+    assert.equal(seen.status,200,JSON.stringify(seen.body));
+    assert.ok(seen.body.images.front && seen.body.images.back);
+    assert.equal(seen.body.images.selfie,null);
+    pass("OCR-only retained 2-sided ID can be reviewed, no fabricated selfie or auto approval");
+
+    const finalViewLogs=(await db.collection("adminActivityLogs")
+      .where("action","==","Resident Identity Evidence Viewed").get());
+    assert.equal(finalViewLogs.size,accessCountBefore+2);
+    assert.equal((await profileRef(idOnlyUid).get()).data().identityVerified,false);
+    pass("Each successful private Admin evidence view audited exactly once; unauthorized views not audited");
 
     console.log("PASS: "+labels.length+" real emulator HTTP+Firestore Admin scenarios; DEMO project only");
   } finally {
