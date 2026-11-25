@@ -1,0 +1,180 @@
+name: Original AI Combined Safe Staging Release Gate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-safe-release-candidate-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safe-release-check:
+    name: Exact live-backed Admin regression, Firebase staging guard and Python compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-volunserve-original-ai-native-status
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-original-ai-native-status
+      GOOGLE_APPLICATION_CREDENTIALS: ''
+      FIREBASE_SERVICE_ACCOUNT_JSON: ''
+      CLOUDINARY_API_KEY: ''
+      CLOUDINARY_API_SECRET: ''
+      IDENTITY_AI_INTERNAL_KEY: ''
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Pin original production sources and assert only isolated candidate edits
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs');
+            const path=require('node:path');
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const liveNode='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const securityGreen='9ca30b97738dc424e089cdc141c159b712a5f1a0';
+            const restoredWeb='5af28d279618dacd5eab518e5e0d52259eae8844';
+            const nativeGreen='28666b78d95b60ed77645488fa00a57aff1506d3';
+            const pythonGreen='b6e093065fbd207756ba5427a127a74b2bb02ba8';
+            const cmp=await github.rest.repos.compareCommits({
+              owner,repo,base:liveNode,head:context.sha
+            });
+            assert.equal(cmp.data.behind_by,0,'Candidate dropped currently deployed Node functionality');
+            const expected=[
+              '.github/workflows/qa-original-ai-failclosed-verified-status-20261125.yml',
+              '.github/workflows/qa-original-ai-safe-release-gate-20261125.yml',
+              'backend/firebaseAdmin.js',
+              'backend/server.js',
+              'backend/stagingOriginalAiIsolationPolicy.js',
+              'scripts/qa-original-ai-failclosed-verified-status-20261125.cjs',
+              'scripts/qa-original-ai-staging-startup-failclosed-20261125.cjs'
+            ].sort();
+            const actual=(cmp.data.files||[]).map(f=>f.filename).sort();
+            assert.deepEqual(actual,expected,'Unexpected code/UI/rules/workflow modification');
+            const fetchText=async(filename,ref)=>{
+              const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
+              assert.equal(data.encoding,'base64','Missing immutable '+filename);
+              return Buffer.from(data.content,'base64').toString('utf8');
+            };
+            const currentServer=await fetchText('backend/server.js',context.sha);
+            const previousPassingServer=await fetchText('backend/server.js',securityGreen);
+            assert.equal(currentServer,previousPassingServer,
+              'Combined candidate accidentally changed previously passing Node role/approval code');
+            const files=[
+              ['backend/server.js',context.sha,'backend/server.js'],
+              ['backend/firebaseAdmin.js',context.sha,'backend/firebaseAdmin.js'],
+              ['backend/stagingOriginalAiIsolationPolicy.js',context.sha,'backend/stagingOriginalAiIsolationPolicy.js'],
+              ['backend/verifiedFirebaseToken.js',liveNode,'backend/verifiedFirebaseToken.js'],
+              ['backend/adminAccess.js',liveNode,'backend/adminAccess.js'],
+              ['backend/selectedIdPolicy.js',liveNode,'backend/selectedIdPolicy.js'],
+              ['backend/identityIssuerReviewPolicy.js',liveNode,'backend/identityIssuerReviewPolicy.js'],
+              ['lib/identityVerification.ts',restoredWeb,'lib/identityVerification.ts'],
+              ['app/identity-verification.tsx',nativeGreen,'app/identity-verification.tsx'],
+              ['scripts/qa-original-ai-failclosed-verified-status-20261125.cjs',securityGreen,'test-status.js'],
+              ['scripts/qa-original-ai-staging-startup-failclosed-20261125.cjs',context.sha,'test-startup.js'],
+              ['identity-ai/staging_original_ai_isolation.py',pythonGreen,'python-guard.py']
+            ];
+            for(const [filename,ref,dest] of files){
+              const content=await fetchText(filename,ref);
+              const output=path.join(process.env.GITHUB_WORKSPACE,'.qa-safe',dest);
+              fs.mkdirSync(path.dirname(output),{recursive:true});
+              fs.writeFileSync(output,content);
+              core.info('Read-only pinned '+filename+' @ '+ref.slice(0,12));
+            }
+            const guardSource=fs.readFileSync('.qa-safe/backend/firebaseAdmin.js','utf8');
+            assert.match(guardSource,/assertOriginalAiStagingIsolation\(process\.env,\s*serviceAccount\)/);
+            assert.match(guardSource,/existing Firebase app project cannot be independently verified/);
+            const nodeSource=fs.readFileSync('.qa-safe/backend/server.js','utf8');
+            assert.match(nodeSource,/identityVerified:\s*accountApproved/);
+            assert.match(nodeSource,/profile\?\.identityVerified ===\s*true\s*&&/);
+            core.info('PASS: exact previously tested Admin/Resident security code and staged Firebase guard combined');
+      - name: Test startup guard against production Firebase-app reuse and stage key crossover
+        run: |
+          node --check .qa-safe/test-startup.js
+          node .qa-safe/test-startup.js
+          python - <<'PY'
+          from pathlib import Path
+          import importlib.util,hashlib
+          p=Path('.qa-safe/python-guard.py')
+          spec=importlib.util.spec_from_file_location('synthetic_original_ai_staging_guard',p)
+          m=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          sha=lambda s:hashlib.sha256(s.encode()).hexdigest()
+          secret='local-synthetic-original-ai-private-key-staging-20261125'
+          prod='local-synthetic-original-ai-private-key-production-20261125'
+          env={
+            'RENDER_SERVICE_NAME':'volunserve-identity-ai-staging',
+            'VOLUNSERVE_DEPLOYMENT_ENV':'staging',
+            'VOLUNSERVE_STAGING_STRICT':'true',
+            'VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID':'demo-safe-staging-project',
+            'VOLUNSERVE_STAGING_BACKEND_URL':'https://volunserve-backend-staging.onrender.com',
+            'GOOGLE_CLOUD_PROJECT':'demo-safe-staging-project',
+            'IDENTITY_AI_INTERNAL_KEY':secret,
+            'VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256':sha(secret),
+            'VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256':sha(prod),
+            'ALLOWED_ORIGINS':'http://127.0.0.1:19006'
+          }
+          m.assert_original_ai_staging_isolated(env)
+          print('PASS: independently pinned original Python AI staging candidate accepts compatible fake Node fingerprint')
+          for name,change in [
+            ('production Firebase project',{'VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID':'volunserve-3aa5b'}),
+            ('reused prod key',{'VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256':sha(secret)}),
+            ('wrong API fingerprint',{'IDENTITY_AI_INTERNAL_KEY':prod}),
+            ('production frontend origin',{'ALLOWED_ORIGINS':'https://volunserve.com'}),
+            ('private storage secret injected into Python',{'CLOUDINARY_API_SECRET':'FAKE-NON-SECRET'})
+          ]:
+            try:
+              m.assert_original_ai_staging_isolated({**env,**change})
+            except RuntimeError as exc:
+              assert 'staging isolation blocked' in str(exc)
+            else:
+              raise AssertionError('Unsafe Python configuration allowed: '+name)
+          print('PASS: 5 incompatible Python staging cases blocked')
+          print('HOSTED CREDENTIAL ISOLATION STILL NOT VERIFIED; SYNTHETIC CONFIG ONLY')
+          PY
+      - name: Install Firebase emulator/Node runtime and deny-all Firestore rules
+        run: |
+          npm install --prefix .qa-safe --no-save --no-audit --no-fund --ignore-scripts \
+            express@5.1.0 firebase-admin@14.3.0 firebase-tools@14 typescript@5.9.3
+          node --check .qa-safe/test-status.js
+          node - <<'NODE'
+          const fs=require('node:fs');
+          fs.writeFileSync('.qa-safe/emulators.json',JSON.stringify({
+            emulators:{
+              auth:{host:'127.0.0.1',port:9099},
+              firestore:{host:'127.0.0.1',port:8080},
+              ui:{enabled:false}
+            },firestore:{rules:'firestore.rules'}
+          },null,2));
+          fs.writeFileSync('.qa-safe/firestore.rules',
+            'rules_version = "2";\nservice cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if false; } } }\n');
+          console.log('PASS: demo Firebase project, localhost Auth/Firestore, client rules deny all');
+          NODE
+      - name: Rerun full Admin identity approval and restricted Resident rights regression
+        run: |
+          test "$GCLOUD_PROJECT" = demo-volunserve-original-ai-native-status
+          test -z "$GOOGLE_APPLICATION_CREDENTIALS"
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$CLOUDINARY_API_KEY"
+          test -z "$CLOUDINARY_API_SECRET"
+          test -z "$IDENTITY_AI_INTERNAL_KEY"
+          .qa-safe/node_modules/.bin/firebase \
+            emulators:exec \
+            --project demo-volunserve-original-ai-native-status \
+            --only auth,firestore \
+            --config .qa-safe/emulators.json \
+            "node .qa-safe/test-status.js"
+      - name: Final scope and non-deployment marker
+        run: |
+          echo "PASS NO DEPLOY: Native original AI, backend Admin role protections and strict staging startup tested with synthetic identities"
+          echo "RELEASE BLOCKED: actual independent staging Firebase and Cloudinary credentials must be attested before hosted ID uploads"
+# Offline Firebase Auth/Firestore DEMO emulators and mock Firebase SDK only.
+# Never runs Render deployment, Firebase production operations or Cloudinary upload.
