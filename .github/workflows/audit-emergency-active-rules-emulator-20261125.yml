@@ -1,0 +1,157 @@
+name: Read-Only Active Emergency Rules Emulator Audit (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - .github/workflows/audit-emergency-active-rules-emulator-20261125.yml
+      - scripts/qa-emergency-active-rules-emulator-20261125.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  unprivileged-pr-preflight:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Fetch exact reviewed commit without processing legacy broken gitlinks
+        shell: bash
+        env:
+          REVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init -q .
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "$REVIEW_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$REVIEW_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify emulator-only test script
+        run: |
+          node --check scripts/qa-emergency-active-rules-emulator-20261125.cjs
+          node -e "const fs=require('fs');const s=fs.readFileSync('scripts/qa-emergency-active-rules-emulator-20261125.cjs','utf8');if(!s.includes('FIRESTORE_EMULATOR_HOST')||!s.includes('Deployed rules fixture hash mismatch'))process.exit(1)"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Synthetic Emergency permission E2E (repository Rules ONLY; not production verification)
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/qa-emergency-active-rules-emulator-20261125.cjs"
+      - name: Replay published Hosting SOURCE Rules in isolated emulator (NOT ACTIVE deployed policy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="4e2c5b47872dc69a678d6235a34b29662a5c1089"
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "$SOURCE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          RULES_FILE="$(mktemp -t volunserve-published-hosting-source-rules-XXXXXX)"
+          trap 'rm -f "$RULES_FILE"' EXIT
+          git show "$SOURCE_SHA:firestore.rules" > "$RULES_FILE"
+          test "$(wc -c < "$RULES_FILE")" -gt 100000
+          SHA="$(sha256sum "$RULES_FILE" | cut -d' ' -f1)"
+          VOLUNSERVE_QA_FIRESTORE_RULES_FILE="$RULES_FILE" \
+          VOLUNSERVE_QA_EXPECTED_RULES_SHA256="$SHA" \
+          npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/qa-emergency-active-rules-emulator-20261125.cjs"
+
+  protected-active-policy-audit:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/live-protected' && github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Fetch exact reviewed commit without processing legacy broken gitlinks
+        shell: bash
+        env:
+          REVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git init -q .
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "$REVIEW_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$REVIEW_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch EXACT ACTIVE Firestore rules using GET ONLY; never print source or token
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node <<'NODE'
+          'use strict';
+          const fs=require('node:fs');
+          const path=require('node:path');
+          const crypto=require('node:crypto');
+          const assert=require('node:assert/strict');
+          const PROJECT='volunserve-3aa5b';
+          const EXPECTED_RELEASE='projects/volunserve-3aa5b/rulesets/d04c446a-7cdc-4ca8-96f3-f56a8d6d8a13';
+          const EXPECTED_HASH='9291772f8b493ace946be9a601d7b84a4cfa8af9827030a2b667508312cc6c30';
+          const sa=JSON.parse(process.env.FIREBASE_SA||'{}');
+          assert.equal(sa.type,'service_account','Authorized read-only audit credential unavailable');
+          assert.equal(sa.project_id,PROJECT,'Wrong Firebase project');
+          async function accessToken(){
+            const now=Math.floor(Date.now()/1000);
+            const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+            const unsigned=encode({alg:'RS256',typ:'JWT'})+'.'+encode({
+              iss:sa.client_email,scope:'https://www.googleapis.com/auth/cloud-platform',
+              aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+1200
+            });
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(unsigned),sa.private_key).toString('base64url');
+            const response=await fetch('https://oauth2.googleapis.com/token',{
+              method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({
+                grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion:unsigned+'.'+signature
+              }),signal:AbortSignal.timeout(15000)
+            });
+            assert(response.ok,'Read-only OAuth request failed, HTTP '+response.status);
+            return (await response.json()).access_token;
+          }
+          async function main(){
+            const token=await accessToken();
+            async function read(pathPart){
+              const response=await fetch('https://firebaserules.googleapis.com/v1/'+pathPart,{
+                method:'GET',headers:{Authorization:'Bearer '+token},
+                signal:AbortSignal.timeout(20000)
+              });
+              assert(response.ok,'Read-only Firebase Rules GET failed, HTTP '+response.status);
+              return response.json();
+            }
+            const release=await read('projects/'+PROJECT+'/releases/cloud.firestore');
+            assert.equal(release.rulesetName,EXPECTED_RELEASE,'Active ruleset changed: fail closed, re-audit first');
+            const ruleset=await read(release.rulesetName);
+            const files=(ruleset.source?.files||[]).filter(x=>x.name==='firestore.rules'||x.name==='cloud.firestore');
+            assert(files.length===1,'Unexpected active Firestore rule source file count');
+            const content=files[0].content;
+            assert(typeof content==='string'&&content.length>100000,'Active ruleset incomplete');
+            const actual=crypto.createHash('sha256').update(content).digest('hex');
+            assert.equal(actual,EXPECTED_HASH,'Active policy fingerprint changed: fail closed');
+            const file=path.join(process.env.RUNNER_TEMP,'volunserve-active-emergency-rules.rules');
+            fs.writeFileSync(file,content,{encoding:'utf8',mode:0o600,flag:'wx'});
+            fs.appendFileSync(process.env.GITHUB_ENV,'VOLUNSERVE_QA_FIRESTORE_RULES_FILE='+file+'\n');
+            fs.appendFileSync(process.env.GITHUB_ENV,'VOLUNSERVE_QA_EXPECTED_RULES_SHA256='+actual+'\n');
+            console.log('PASS: active Firestore policy read-only GET; protected project/release/fingerprint verified');
+            console.log('ACTIVE_RULES_SHA256='+actual);
+            console.log('No policy source, OAuth token, production data, or secret is printed.');
+          }
+          main().catch(error=>{console.error('ACTIVE_POLICY_AUDIT_BLOCKED: '+error.message);process.exitCode=1});
+          NODE
+      - name: Replay ACTUAL deployed rules against synthetic users in LOCAL emulator ONLY
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/qa-emergency-active-rules-emulator-20261125.cjs"
+      - name: Destroy temporary active rules file (even on failure)
+        if: always()
+        run: rm -f "$RUNNER_TEMP/volunserve-active-emergency-rules.rules"
