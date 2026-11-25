@@ -32,9 +32,14 @@ function config(env=process.env){
     env.FIRESTORE_EMULATOR_HOST==="127.0.0.1:8080"&&
     env.FIREBASE_AUTH_EMULATOR_HOST==="127.0.0.1:9099"&&
     env.VOLUNSERVE_RENDER_AUTO_EMULATOR_APPROVED==="true";
+  // Manual-response test policy: NEVER create a new production auto-offer,
+  // even if old production environment flags were accidentally left enabled.
+  // Preserve the separate respond() path for any previously issued invitations
+  // while the existing cases are reviewed or completed.
+  const productionManualOnly=project==="volunserve-3aa5b";
   return {enabled:env.VOLUNSERVE_RENDER_AUTO_ENABLED==="true"&&
     approvedProject&&(isStage||isProduction||emulator),
-    project,isStage,isProduction,emulator};
+    productionManualOnly,project,isStage,isProduction,emulator};
 }
 function isRecentSubmission(c,uid,now,{staging=false}={}){
   const created=c?.createdAt?.toMillis?.();
@@ -82,6 +87,8 @@ function makeEngine({db,FieldValue,env=process.env,clock=()=>Date.now()}={}){
   const stamp=()=>FieldValue.serverTimestamp();
   async function submitted({uid,caseId,profile}={}){
     if(!gate.enabled)return result("disabled","explicit_render_gate_off");
+    if(gate.productionManualOnly)
+      return result("disabled","production_manual_assignment_only");
     if(!UID.test(String(uid||""))||!UID.test(String(caseId||"")))
       return result("blocked","invalid_account_or_case");
     if(!profile||profile.status!=="approved"||
