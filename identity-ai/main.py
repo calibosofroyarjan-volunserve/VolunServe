@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import math
 import os
@@ -9,7 +10,14 @@ from io import BytesIO
 import cv2
 import mediapipe as mp
 import pytesseract
-from document_screening import assess_document_text, document_ocr_unavailable
+from strict_document_screening import (
+    assess_document_sides, assess_profile_name, document_ocr_unavailable,
+    add_photo_quality, add_back_photo_quality,
+    blurry_national_id_claim_needs_review,
+)
+from profile_consistency import profile_comparison
+from face_preflight_policy import screening_ready_for_face_comparison
+from passport_mrz_shadow import assess_passport_mrz
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -33,7 +41,9 @@ ACCEPTED_ID_TYPES = {
     "national_id",
     "drivers_license",
     "passport",
-    "other_government_id",
+    "other_government_id",  # legacy category: never auto-approved
+    "umid",
+    "prc_id",
 }
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
@@ -873,38 +883,109 @@ def failed_attempt_result(
     }
 
 
-def screen_government_id(*, declared_type, id_document_bytes):
-    """OCR checks ID *type plausibility* only; it cannot authenticate issuance.
-
-    No OCR text, names, ID numbers, or face data are returned or persisted.
-    Every result requires an independent LGU document-authenticity review.
-    """
-    try:
-        image = decode_image(id_document_bytes, "Government ID image")
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Bound processing size while sharpening smaller photographed labels.
-        longest = max(gray.shape[:2])
-        if longest < 1500:
-            factor = min(1.6, 2100.0 / float(longest))
-            gray = cv2.resize(
-                gray, None, fx=factor, fy=factor,
-                interpolation=cv2.INTER_CUBIC,
-            )
-        # Complement sparse-card OCR with an adaptive-contrast OCR pass.
-        # No resulting text is logged, retained, or sent back to clients.
-        contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
-        processed = cv2.adaptiveThreshold(
-            contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 31, 11,
+def extract_government_id_text(id_document_bytes, label):
+    """Transient OCR only; never log, persist, or return raw ID content."""
+    image = decode_image(id_document_bytes, label)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    longest = max(gray.shape[:2])
+    if longest < 1500:
+        factor = min(1.6, 2100.0 / float(longest))
+        gray = cv2.resize(
+            gray, None, fx=factor, fy=factor,
+            interpolation=cv2.INTER_CUBIC,
         )
-        extracted = pytesseract.image_to_string(gray, config="--psm 11")
-        enhanced = pytesseract.image_to_string(processed, config="--psm 6")
-        return assess_document_text(declared_type, extracted + "\n" + enhanced)
+    contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    processed = cv2.adaptiveThreshold(
+        contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY, 31, 11,
+    )
+    return (
+        pytesseract.image_to_string(gray, config="--psm 11")
+        + "\n"
+        + pytesseract.image_to_string(processed, config="--psm 6")
+    )
+
+
+def screen_government_id(
+    *, declared_type, id_document_bytes, id_back_document_bytes=None,
+    expected_first_name="", expected_last_name="",
+    expected_date_of_birth="", expected_barangay="",
+):
+    """OCR plausibility and profile consistency; never government issuance."""
+    try:
+        front_text = extract_government_id_text(
+            id_document_bytes, "Government ID front image"
+        )
+        back_text = (
+            extract_government_id_text(
+                id_back_document_bytes, "Government ID back image"
+            )
+            if id_back_document_bytes is not None else None
+        )
+        result = assess_document_sides(declared_type, front_text, back_text)
+        # Transient whole-image blur estimate; not proof of real ID issuance.
+        quality = image_quality(decode_image(id_document_bytes, "Government ID front image"))
+        result = add_photo_quality(result, quality["blurVariance"])
+        # The back must have independent image-quality evidence. A readable
+        # front does NOT make a blurred or illegible reverse side adequate.
+        # Passport bio page is single-sided and exempt from back scanning.
+        back_blur = None
+        if id_back_document_bytes is not None and declared_type != "passport":
+            back_image = decode_image(id_back_document_bytes, "Government ID back image")
+            back_blur = image_quality(back_image)["blurVariance"]
+        result = add_back_photo_quality(result, back_blur)
+        ocr_combined = front_text + "\n" + (back_text or "")
+        result.update(assess_profile_name(
+            expected_first_name, expected_last_name, ocr_combined
+        ))
+        result.update(profile_comparison(
+            expected_date_of_birth, expected_barangay, ocr_combined
+        ))
+        if declared_type == "passport":
+            # ICAO TD3 MRZ checks add a privacy-safe textual consistency clue
+            # from existing Tesseract OCR; valid checksum != genuine passport.
+            mrz = assess_passport_mrz(front_text, expected_date_of_birth)
+            result.update(mrz)
+            if mrz["passportMrzCheck"] in (
+                "checksum_inconsistent_or_ocr_error", "multiple_candidates"
+            ):
+                if result["status"] == "text_consistent_unverified":
+                    result["status"] = "inconclusive"
+                result["warningCodes"] = list(dict.fromkeys(
+                    result.get("warningCodes", []) + ["passport_mrz_review_required"]
+                ))
+            if mrz["passportMrzBirthDateCheck"] == "possible_conflict":
+                result["profileBirthDateCheck"] = "possible_conflict"
+                result["profileBirthDateCompared"] = True
+                result["warningCodes"] = list(dict.fromkeys(
+                    result.get("warningCodes", [])
+                    + ["passport_mrz_profile_birth_date_conflict"]
+                ))
+            elif (mrz["passportMrzBirthDateCheck"] == "possible_match"
+                  and result.get("profileBirthDateCheck") == "inconclusive"):
+                # A valid checksum with matching DOB is only a plausible
+                # OCR clue, never proof of age, holder or issuer authenticity.
+                result["profileBirthDateCheck"] = "possible_match"
+                result["profileBirthDateCompared"] = True
+        # Explicitly report missing issuer/PAD checks. Neither OCR, matching
+        # demographics nor a client movement challenge proves identity.
+        result["issuerAuthenticityStatus"] = "not_verified"
+        result["presentationAttackStatus"] = "not_validated"
+        return result
     except Exception:
-        # OCR depends on local Tesseract assets and camera image quality.
-        # Fail closed: no automatic rejection or claims of genuine IDs.
-        logging.warning("Government ID keyword screening unavailable")
-        return document_ocr_unavailable(declared_type)
+        logging.warning("Government ID OCR screening unavailable")
+        result = document_ocr_unavailable(declared_type)
+        result["backSideProvided"] = id_back_document_bytes is not None
+        result["backSideScreened"] = False
+        result["backImageQualityStatus"] = (
+            "not_required" if declared_type == "passport" else "not_checked"
+        )
+        result["profileNameCheck"] = "inconclusive"
+        result["profileNameCompared"] = False
+        result.update(profile_comparison(expected_date_of_birth, expected_barangay, ""))
+        result["issuerAuthenticityStatus"] = "not_verified"
+        result["presentationAttackStatus"] = "not_validated"
+        return result
 
 
 def run_face_verification(
@@ -1164,6 +1245,107 @@ def capabilities():
     }
 
 
+# Document-only precheck: no selfie, no face comparison, no attempt charge.
+# Return only sanitized OCR status; user consent and upload rate limiting
+# are enforced by the authenticated Node gateway before reaching this route.
+@app.post("/document/precheck")
+async def document_precheck(
+    request: Request,
+    x_volunserve_user_id: str | None = Header(
+        default=None, alias="X-VolunServe-User-Id",
+    ),
+    x_volunserve_internal_key: str | None = Header(
+        default=None, alias="X-VolunServe-Internal-Key",
+    ),
+    x_volunserve_profile_first_name: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-First-Name",
+    ),
+    x_volunserve_profile_last_name: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-Last-Name",
+    ),
+    x_volunserve_profile_date_of_birth: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-Date-Of-Birth",
+    ),
+    x_volunserve_profile_barangay: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-Barangay",
+    ),
+):
+    require_internal_backend(x_volunserve_internal_key)
+    validate_forwarded_user(x_volunserve_user_id)
+    content_type = clean_text(request.headers.get("content-type", ""), 200).lower()
+    if not content_type.startswith("multipart/form-data"):
+        raise HTTPException(status_code=415, detail="Identity documents require multipart form data.")
+    form = await request.form()
+    declared_type = clean_text(form.get("idType"), 60).lower()
+    if declared_type not in ACCEPTED_ID_TYPES:
+        raise HTTPException(status_code=400, detail="Choose one of the five supported government IDs.")
+    front_upload = form.get("idDocument")
+    back_upload = form.get("idBackDocument")
+    if declared_type != "passport" and not isinstance(back_upload, StarletteUploadFile):
+        raise HTTPException(status_code=400, detail="Capture both sides of the selected ID.")
+    if form.get("selfie") is not None:
+        raise HTTPException(status_code=400, detail="A selfie is not required for document screening.")
+    try:
+        front_bytes = await read_upload(
+            front_upload, label="Government ID front image",
+            maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+        )
+        back_bytes = (
+            await read_upload(back_upload, label="Government ID back image",
+                              maximum_bytes=MAX_ID_DOCUMENT_BYTES)
+            if isinstance(back_upload, StarletteUploadFile) else None
+        )
+    finally:
+        if isinstance(front_upload, StarletteUploadFile):
+            await front_upload.close()
+        if isinstance(back_upload, StarletteUploadFile):
+            await back_upload.close()
+    if back_bytes is not None:
+        if hashlib.sha256(front_bytes).digest() == hashlib.sha256(back_bytes).digest():
+            raise HTTPException(status_code=400, detail="Front and back cannot be identical images.")
+        decode_image(back_bytes, "Government ID back image")
+    # Never send account fields, DOB, names, image data or OCR text back.
+    screening = await asyncio.to_thread(
+        screen_government_id, declared_type=declared_type,
+        id_document_bytes=front_bytes, id_back_document_bytes=back_bytes,
+        expected_first_name=x_volunserve_profile_first_name or "",
+        expected_last_name=x_volunserve_profile_last_name or "",
+        expected_date_of_birth=x_volunserve_profile_date_of_birth or "",
+        expected_barangay=x_volunserve_profile_barangay or "",
+    )
+    birthday_conflict = screening.get("profileBirthDateCheck") == "possible_conflict"
+    # Document precheck and the actual /verify route MUST share exactly the
+    # same fail-closed policy: no face comparison after contradictory ID OCR,
+    # missing/blurred back evidence or an unresolved DOB/MRZ conflict.
+    # "pass" here means eligible to attempt matching, NOT an authentic ID.
+    recognized = screening_ready_for_face_comparison(screening, declared_type)
+    review = (
+        not birthday_conflict
+        and not recognized
+        and blurry_national_id_claim_needs_review(declared_type, screening)
+    )
+    outcome = "pass" if recognized else "review" if review else "retry"
+    if birthday_conflict and outcome == "retry":
+        message = "The ID birth date may differ from your saved profile. Retake a clear ID or ask Admin to review your profile; this is not proof of fraud."
+    elif outcome == "pass":
+        message = "ID format appears consistent. Birthday and barangay checks are OCR clues only; unresolved fields still require Admin review."
+    elif outcome == "review":
+        message = "The selected National ID is too blurry. It may continue only to Admin rescan review, never automatic approval."
+    elif "school_id_not_supported" in (screening.get("warningCodes") or []):
+        message = "Unsupported School or employee ID. Choose a valid government-issued ID."
+    elif "document_front_back_swapped" in (screening.get("warningCodes") or []):
+        message = "Front and back appear reversed. Retake each ID side in its correct slot."
+    elif "document_back_looks_like_front" in (screening.get("warningCodes") or []):
+        message = "Back scan may show the front of the ID. Retake the reverse side."
+    elif "document_front_side_conflict" in (screening.get("warningCodes") or []):
+        message = "Front scan appears to contain back-side details. Retake the portrait/front."
+    else:
+        message = "Document type or side could not be confirmed. Retake clear ID photos."
+    return {"ok": True, "outcome": outcome, "documentScreening": screening,
+            "message": message, "authenticityVerified": False,
+            "livenessVerified": False}
+
+
 @app.post(
     "/verify"
 )
@@ -1181,6 +1363,10 @@ async def verify_identity(
         default=None,
         alias="X-VolunServe-Internal-Key",
     ),
+    x_volunserve_profile_first_name: str | None = Header(default=None, alias="X-VolunServe-Profile-First-Name"),
+    x_volunserve_profile_last_name: str | None = Header(default=None, alias="X-VolunServe-Profile-Last-Name"),
+    x_volunserve_profile_date_of_birth: str | None = Header(default=None, alias="X-VolunServe-Profile-Date-Of-Birth"),
+    x_volunserve_profile_barangay: str | None = Header(default=None, alias="X-VolunServe-Profile-Barangay"),
 ):
     require_internal_backend(
         x_volunserve_internal_key
@@ -1223,6 +1409,8 @@ async def verify_identity(
     selfie_upload = form.get(
         "selfie"
     )
+    id_back_upload = form.get("idBackDocument")
+    id_back_document_bytes = None
     try:
         id_document_bytes = (
             await read_upload(
@@ -1244,6 +1432,12 @@ async def verify_identity(
                 ),
             )
         )
+        if isinstance(id_back_upload, StarletteUploadFile):
+            id_back_document_bytes = await read_upload(
+                id_back_upload,
+                label="Government ID back image",
+                maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+            )
     finally:
         if isinstance(
             id_upload,
@@ -1255,6 +1449,8 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await selfie_upload.close()
+        if isinstance(id_back_upload, StarletteUploadFile):
+            await id_back_upload.close()
     if not face_mesh_engine_ready():
         raise HTTPException(
             status_code=503,
@@ -1266,17 +1462,40 @@ async def verify_identity(
     try:
         # Both the profile's Be a Verified Resident flow and the LGU review
         # queue use this one protected endpoint; no separate visual-only AI.
-        result = await asyncio.to_thread(
-            run_face_verification,
-            uid=uid,
-            id_document_bytes=id_document_bytes,
-            selfie_bytes=selfie_bytes,
-        )
+        # Use the historical OCR gate FIRST, then invoke the unchanged
+        # original MediaPipe face matcher only for a plausible government ID.
         document_screening = await asyncio.to_thread(
             screen_government_id,
             declared_type=id_type,
             id_document_bytes=id_document_bytes,
+            id_back_document_bytes=id_back_document_bytes,
+            expected_first_name=x_volunserve_profile_first_name or "",
+            expected_last_name=x_volunserve_profile_last_name or "",
+            expected_date_of_birth=x_volunserve_profile_date_of_birth or "",
+            expected_barangay=x_volunserve_profile_barangay or "",
         )
+        ready = id_type != "other_government_id" and screening_ready_for_face_comparison(
+            document_screening, id_type
+        )
+        if id_back_document_bytes is not None and hashlib.sha256(id_document_bytes).digest() == hashlib.sha256(id_back_document_bytes).digest():
+            ready = False
+            document_screening["status"] = "inconclusive"
+            document_screening["warningCodes"] = list(dict.fromkeys(
+                document_screening.get("warningCodes", []) + ["document_front_back_duplicate"]
+            ))[:4]
+        if not ready:
+            result = failed_attempt_result(
+                uid=uid,
+                message="ID OCR screening did not confirm the selected government ID. Retake a clearer front/back scan or request Admin review.",
+                warning="document_precheck_not_ready",
+            )
+        else:
+            result = await asyncio.to_thread(
+                run_face_verification,
+                uid=uid,
+                id_document_bytes=id_document_bytes,
+                selfie_bytes=selfie_bytes,
+            )
     except HTTPException:
         raise
     except Exception:
