@@ -5,6 +5,7 @@ on:
     paths:
       - backend/server.js
       - backend/identityTrustedAutomaticCompletion.js
+      - backend/identityAutoApprovalGateway.js
       - backend/test-identityTrustedAutomaticCompletion.js
       - backend/identityTrustedSignedProof.js
       - backend/TRUSTED-AUTO-VERIFICATION-INTEGRATION.md
@@ -47,6 +48,7 @@ jobs:
           const allowed=[
             '.github/workflows/qa-trusted-auto-identity-restoration-20261125.yml',
             'backend/identityTrustedAutomaticCompletion.js',
+            'backend/identityAutoApprovalGateway.js',
             'backend/server.js',
             'backend/test-identityTrustedAutomaticCompletion.js',
             'backend/identityTrustedSignedProof.js',
