@@ -43,6 +43,21 @@ jobs:
           java-version: '21'
       - name: Synthetic Emergency permission E2E (repository Rules ONLY; not production verification)
         run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/qa-emergency-active-rules-emulator-20261125.cjs"
+      - name: Replay published Hosting SOURCE Rules in isolated emulator (NOT ACTIVE deployed policy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="4e2c5b47872dc69a678d6235a34b29662a5c1089"
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "$SOURCE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          RULES_FILE="$(mktemp -t volunserve-published-hosting-source-rules-XXXXXX)"
+          trap 'rm -f "$RULES_FILE"' EXIT
+          git show "$SOURCE_SHA:firestore.rules" > "$RULES_FILE"
+          test "$(wc -c < "$RULES_FILE")" -gt 100000
+          SHA="$(sha256sum "$RULES_FILE" | cut -d' ' -f1)"
+          VOLUNSERVE_QA_FIRESTORE_RULES_FILE="$RULES_FILE" \
+          VOLUNSERVE_QA_EXPECTED_RULES_SHA256="$SHA" \
+          npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/qa-emergency-active-rules-emulator-20261125.cjs"
 
   protected-active-policy-audit:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/live-protected' && github.repository == 'calibosofroyarjan-volunserve/VolunServe'
