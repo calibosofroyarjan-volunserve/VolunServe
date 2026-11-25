@@ -5488,6 +5488,11 @@ app.post(
           authenticityVerified:false, livenessVerified:false, manualReviewRequired:true}
         : normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
+      // Both high and low similarity return manual_review from the original
+      // matcher. Only Python's explicit above-threshold signal may qualify for
+      // face-only Admin approval; missing/false values fail closed.
+      const faceComparisonPassed = faceOnly && rawDecision === "manual_review" &&
+        aiResult?.faceComparisonPassed === true;
       // A face match cannot compensate for an unsupported, unknown or
       // mismatched selected government ID. Only recognized, selected types
       // can proceed to manual identity review; all others require a retry.
@@ -5559,7 +5564,9 @@ app.post(
           ? "three_failed_attempts"
           : reviewTrack;
         const resultMessage = faceOnly
-          ? decision === "failed"
+          ? !faceComparisonPassed
+            ? "The original face comparison was unsuccessful or inconclusive. Request a clearer retry; no automatic identity verification occurred."
+          : decision === "failed"
             ? "The government ID portrait and selfie did not match clearly. Retake or ask Admin for review. No OCR or document authenticity check was performed."
             : "Original face-only comparison completed. No OCR, government ID issuance check or validated liveness was performed. Independent Admin review is required."
           : reviewTrack === "blurry_id_review"
@@ -5599,6 +5606,7 @@ app.post(
           verificationMethod: faceOnly ? "volunserve_ai_face_only" : "volunserve_ai",
           status: result.status,
           aiDecision: decision,
+          faceComparisonPassed: faceOnly ? faceComparisonPassed : FieldValue.delete(),
           decision: FieldValue.delete(),
           manualReviewDecision: FieldValue.delete(),
           manualValidationMethod: FieldValue.delete(),
@@ -5650,6 +5658,7 @@ app.post(
             attemptNumber: attemptCount,
             attemptCycle,
             aiDecision: decision,
+            faceComparisonPassed: faceOnly ? faceComparisonPassed : false,
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
@@ -5675,6 +5684,7 @@ app.post(
           }, { merge: true });
         return {
           ok: true, status: result.status, verificationId, decision,
+          faceComparisonPassed: faceOnly ? faceComparisonPassed : null,
           matchScore, livenessScore, documentScreening, reviewTrack: finalReviewTrack, message: resultMessage,
           automaticVerificationEligible: automaticApproval.eligible,
           automaticVerificationReason: automaticApproval.reason,
@@ -5763,6 +5773,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     ),
     identityVerified: profile.identityVerified === true,
     aiDecision: cleanText(verification.aiDecision || "", 80),
+    faceComparisonPassed: verification.faceComparisonPassed === true,
     decision: cleanText(verification.decision || "", 80),
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
@@ -6059,11 +6070,13 @@ app.post(
           const faceOnlyReview = verification.verificationMethod === "volunserve_ai_face_only";
           const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
           if (faceOnlyReview && (
-            !["verified", "manual_review"].includes(verification.aiDecision) || !verification.privateEvidenceRequestId ||
+            !["verified", "manual_review"].includes(verification.aiDecision) ||
+            verification.faceComparisonPassed !== true ||
+            !verification.privateEvidenceRequestId ||
             selectedIdCheck.declaredIdType !== "national_id"
           )) {
             throw makeHttpError(409, "face_only_independent_review_required",
-              "Original face-only verification requires an AI matching assessment and retained consented ID/selfie for independent Admin review.");
+              "Original face-only approval requires a confirmed 1-to-1 comparison pass, retained consented ID/selfie and independent Admin ID validation.");
           }
           if (!faceOnlyReview && !selectedIdRecognized(selectedIdCheck)) {
             throw makeHttpError(
