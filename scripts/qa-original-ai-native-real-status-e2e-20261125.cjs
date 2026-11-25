@@ -44,6 +44,7 @@ const code=[
   section("function cleanText(","function normalizeAiDecision("),
   section("function normalizeIdDocumentScreening(","function getBearerToken("),
   section("function getBearerToken(","function getCloudinaryConfig("),
+  section("async function loadUserProfile(","async function requireVerifiedResident("),
   section('app.get(\n  "/api/identity/status"', 'app.post(\n  ["/api/identity/verify"')
 ].join("\n");
 assert.match(code,/app\.get\(\s*"\/api\/identity\/status"/);
@@ -209,9 +210,9 @@ async function run(){
     assert.equal(got.status,403);
     pass("Actual Node Firebase middleware: unverified-email status request denied 403");
     got=await callStatus(noProfile.token);
-    assert.equal(got.status,404);
-    assert.equal(got.data.error,"profile_not_found");
-    pass("Actual Node status route: missing resident profile denied 404");
+    assert.equal(got.status,403);
+    assert.equal(got.data.error,"registration_incomplete");
+    pass("Actual Node auth middleware: incomplete registration denied 403 before status data");
     got=await callStatus(pending.token);
     assert.equal(got.status,200);
     assert.equal(got.data.identityStatus,"pending");
