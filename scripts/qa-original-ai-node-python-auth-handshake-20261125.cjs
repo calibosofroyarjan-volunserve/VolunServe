@@ -173,7 +173,7 @@ async function run(){
 
   assert.ok(visits.every(x=>permitted.has(base+x.path)));
   assert.equal(visits.filter(x=>x.path==="/verify").length,0);
-  assert.ok(visits.length>=9);
+  assert.equal(visits.length,8,"Four direct GETs plus two real two-step Node readiness probes");
   pass("All REAL integration network requests stayed on 127.0.0.1; zero ID media, Firebase, Cloudinary calls");
 
   console.log("SUCCESS:",passCount,"real local Node/Python handshake and fail-closed readiness scenarios");
