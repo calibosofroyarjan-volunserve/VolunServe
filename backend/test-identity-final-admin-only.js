@@ -33,14 +33,21 @@ test("Even a provider verified response cannot promote a Resident without Admin"
   assert.equal(decide("failed", 3).status, "pending");
   assert.equal(decide("failed", 3).requiresManualReview, true);
 });
-test("Identity submit route has no AI-only verified profile writer", () => {
+test("Resident scan cannot auto-promote using AI-only or unverified client proof flags", () => {
   const source = routeBody("/api/identity/verify", "/api/admin/identity/reviews");
   assert.match(source, /requireFirebaseUser/);
   assert.match(source, /enforceSelectedIdDecision\(/);
-  assert.match(source, /identityVerified:\s*false/);
+  assert.match(source, /await assessAutomaticIdentityApproval\(/);
+  assert.match(source, /resolveTrustedAutomaticCompletion\(/);
+  assert.match(source, /process\.env\.VOLUNSERVE_TRUSTED_AUTO_VERIFY_ENABLED === "true"/);
+  assert.match(source, /result: "not_validated"/);
+  assert.match(source, /calibrationValidated: false/);
+  assert.match(source, /freshCapture: false/);
+  assert.match(source, /identityVerified: autoCompletion\.eligible/);
   assert.doesNotMatch(source, /identityVerified:\s*true/);
+  assert.doesNotMatch(source, /issuerValidator:\s*aiResult/);
+  assert.doesNotMatch(source, /padValidator:\s*aiResult/);
   assert.doesNotMatch(source, /identityVerifiedBy:\s*["']volunserve_ai["']/);
-  assert.doesNotMatch(source, /identityStatus:\s*["']verified["']/);
 });
 test("Admin decisions require privileged Firebase authentication and independent issuer check", () => {
   const source = routeBody("/api/admin/identity/reviews/:uid/decision", "/api/admin/assistance/requests/:requestId/start-review");
