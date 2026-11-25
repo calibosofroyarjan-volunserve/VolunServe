@@ -1,0 +1,43 @@
+name: QA Admin Identity Review Reasons Dropdown (NO DEPLOY)
+on:
+  push:
+    branches: [qa/identity-admin-reason-dropdown-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  identity-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Reject changes outside exact UI and QA files
+        run: |
+          set -eu
+          node <<'JS'
+          const cp=require('node:child_process'),assert=require('node:assert/strict');
+          const baseline='4014b18329f3eb2cd366fcb21b1f93e0ab4b842e';
+          cp.execFileSync('git',['merge-base','--is-ancestor',baseline,'HEAD']);
+          cp.execFileSync('git',['diff','--check',baseline,'HEAD']);
+          const changed=cp.execFileSync('git',['diff','--name-only',baseline,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-admin-review-reason-dropdown-20261125.yml',
+            'app/(admin)/identity-reviews.tsx',
+            'scripts/test-identity-admin-reason-dropdown-20261125.cjs'
+          ].sort(),'QA allowed-file scope breached');
+          JS
+      - name: Test choices, other free text, Admin approval and API safeguards
+        run: node scripts/test-identity-admin-reason-dropdown-20261125.cjs
+      - name: TypeScript typecheck
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Confirm no deployment or credentials
+        run: |
+          echo 'NO DEPLOY: production Hosting, Render and Firestore unchanged'

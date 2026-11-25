@@ -63,6 +63,19 @@ type IdentityReview = {
   };
 };
 
+// Predefined reasons accelerate Retry/Reject only; selecting a reason
+// never authenticates an ID or changes any Admin decision on its own.
+const ADMIN_REVIEW_REASONS: {value:string; label:string; faceOnly?:boolean}[] = [
+  {value:"id_blurry",label:"Government ID is blurry or unreadable; please rescan."},
+  {value:"selfie_blurry",label:"Selfie is blurry or the face is not clearly visible; please retake."},
+  {value:"face_uncertain",label:"Face comparison could not be confirmed; please retake both photos."},
+  {value:"wrong_id",label:"Uploaded document is not a National ID; please submit a National ID.",faceOnly:true},
+  {value:"unsupported_id",label:"School ID or unsupported document; please upload a supported government ID."},
+  {value:"missing_photo",label:"Government ID or selfie photo is incomplete or missing; please resubmit."},
+  {value:"issuer_unconfirmed",label:"Government ID authenticity could not be independently confirmed; further validation is required."},
+  {value:"other",label:"Other (Specify)"},
+];
+
 const VALIDATION_METHODS = [
   {value:"psa_national_id_qr_check",label:"PSA National ID Check (official QR verification)",icon:"qr-code-outline" as const},
   {
@@ -729,7 +742,13 @@ function ReviewDetail({
   const [evidenceExpiresAt, setEvidenceExpiresAt] = useState(0);
   const [zoomedEvidence, setZoomedEvidence] = useState<string | null>(null);
   const [evidenceRefresh, setEvidenceRefresh] = useState(0);
-  useEffect(() => { setActiveTab("review"); }, [item.uid, item.verificationId]);
+  const [selectedReviewReason, setSelectedReviewReason] = useState("");
+  const [reviewReasonMenuOpen, setReviewReasonMenuOpen] = useState(false);
+  useEffect(() => {
+    setActiveTab("review");
+    setSelectedReviewReason("");
+    setReviewReasonMenuOpen(false);
+  }, [item.uid, item.verificationId]);
   useEffect(() => {
     let active = true;
     setEvidenceUris(null);
@@ -1084,20 +1103,72 @@ function ReviewDetail({
             <>
               <View style={styles.premiumNotesHeader}>
                 <Text style={styles.premiumNotesLabel}>Review Notes / Retry Reason</Text>
-                <Text style={styles.premiumNotesMeta}>Required for retry or rejection</Text>
+                <Text style={styles.premiumNotesMeta}>Quick reason for Retry or Reject; editable notes below</Text>
               </View>
+              <TouchableOpacity accessibilityRole="button"
+                accessibilityLabel="Select a reason for retry or rejection"
+                accessibilityState={{expanded:reviewReasonMenuOpen}}
+                disabled={!!saving}
+                style={styles.reviewReasonTrigger}
+                onPress={() => setReviewReasonMenuOpen(open => !open)}>
+                <Text style={styles.reviewReasonTriggerText}>
+                  {ADMIN_REVIEW_REASONS.find(reason=>reason.value===selectedReviewReason)?.label
+                    || "Select a reason (optional for typed notes)"}
+                </Text>
+                <Ionicons name={reviewReasonMenuOpen ? "chevron-up" : "chevron-down"}
+                  size={19} color="#08765A" />
+              </TouchableOpacity>
+              {reviewReasonMenuOpen ? (
+                <View style={styles.reviewReasonMenu}>
+                  {ADMIN_REVIEW_REASONS.filter(reason => !reason.faceOnly || faceOnlyReview)
+                    .map(reason => (
+                    <TouchableOpacity key={reason.value} accessibilityRole="button"
+                      accessibilityLabel={reason.label}
+                      style={styles.reviewReasonOption}
+                      onPress={() => {
+                        setSelectedReviewReason(reason.value);
+                        setNotes(reason.value === "other" ? "" : reason.label);
+                        setReviewReasonMenuOpen(false);
+                      }}>
+                      <Text style={styles.reviewReasonOptionText}>{reason.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+              {selectedReviewReason ? (
+                <TouchableOpacity accessibilityRole="button"
+                  style={styles.reviewReasonClear}
+                  onPress={() => {
+                    setSelectedReviewReason("");
+                    setReviewReasonMenuOpen(false);
+                    setNotes("");
+                  }}>
+                  <Text style={styles.reviewReasonClearText}>
+                    Clear reason to write independent approval notes
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              <Text style={styles.reviewReasonHelp}>
+                {selectedReviewReason === "other"
+                  ? "Other selected: describe the issue in your own words below."
+                  : selectedReviewReason
+                    ? "Reason added to notes. You can edit it or add more details below."
+                    : "Select a reason for Retry/Reject, or write independent validation notes to Verify."}
+              </Text>
               <TextInput style={styles.premiumNotesInput} multiline
                 maxLength={500} textAlignVertical="top" value={notes}
                 onChangeText={setNotes}
-                placeholder="Record LGU findings, document issues, or the reason for retry..."
+                placeholder={selectedReviewReason === "other"
+                  ? "Specify the reason clearly (required)..."
+                  : "Review details or independent ID validation notes..."}
                 placeholderTextColor="#94A3B8" />
               <Text style={styles.premiumNotesCounter}>{notes.length}/500</Text>
               <View style={[styles.premiumActions,!screenWide&&styles.premiumActionsStack]}>
                 <TouchableOpacity accessibilityRole="button"
                   style={[styles.premiumVerifyAction,
-                    (cannotApprove || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving)
+                    (cannotApprove || !validationMethod || !issuerReviewAttested || !!selectedReviewReason || notes.trim().length<10 || !!saving)
                       && styles.disabledButton]}
-                  disabled={cannotApprove || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving}
+                  disabled={cannotApprove || !validationMethod || !issuerReviewAttested || !!selectedReviewReason || notes.trim().length<10 || !!saving}
                   onPress={onVerify}>
                   {saving === "verify" ? <ActivityIndicator color="#FFFFFF" /> :
                     <Ionicons name="shield-checkmark-outline" size={21} color="#FFFFFF" />}
@@ -2163,6 +2234,23 @@ const styles = StyleSheet.create({
   premiumNotesHeader: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", gap: 9, marginTop: 16 },
   premiumNotesLabel: { color: "#20362D", fontWeight: "800", fontSize: 12.5, lineHeight: 18 },
   premiumNotesMeta: { color: "#7B8D82", fontSize: 10.5, lineHeight: 17 },
+  reviewReasonTrigger: {
+    width:"100%", paddingHorizontal:13, paddingVertical:12, marginTop:9,
+    minHeight:47, borderWidth:1, borderColor:"#C9D9D1", borderRadius:10,
+    backgroundColor:"#FFFFFF", flexDirection:"row", alignItems:"center", gap:9,
+  },
+  reviewReasonTriggerText: {flex:1, fontSize:12.5, fontWeight:"700", color:"#20362D"},
+  reviewReasonMenu: {
+    marginTop:5, borderColor:"#D4E1D9", borderWidth:1, borderRadius:10,
+    backgroundColor:"#FFFFFF", overflow:"hidden",
+  },
+  reviewReasonOption: {
+    paddingHorizontal:13, paddingVertical:11, borderBottomWidth:1, borderBottomColor:"#EFF4F0",
+  },
+  reviewReasonOptionText: {fontSize:12, color:"#264334", lineHeight:18},
+  reviewReasonHelp: {fontSize:11, lineHeight:17, color:"#637B6B", marginTop:7},
+  reviewReasonClear: {alignSelf:"flex-start", marginTop:8, paddingVertical:4},
+  reviewReasonClearText: {color:"#08765A", fontSize:11.5, fontWeight:"700", textDecorationLine:"underline"},
   premiumNotesInput: {
     minHeight: 108, width: "100%", backgroundColor: "#FFFFFF", color: "#233C32",
     borderWidth: 1, borderColor: "#C9D9D1", borderRadius: 10,
