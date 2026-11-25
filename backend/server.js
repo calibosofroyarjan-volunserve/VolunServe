@@ -5560,6 +5560,7 @@ app.post(
         verificationId,
         screening: documentScreening,
         assets: newEvidenceAssets,
+        aiDecision: decision,
       });
 
       const outcome = await db.runTransaction(async (transaction) => {
