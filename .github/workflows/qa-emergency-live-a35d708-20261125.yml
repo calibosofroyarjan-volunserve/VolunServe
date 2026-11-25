@@ -73,6 +73,25 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - name: Refuse unverified deployed Rules replay fixtures (offline, no secrets)
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const {spawnSync}=require('node:child_process');
+          const script='scripts/test-emergency-manual-flow-emulator-20261125.cjs';
+          const env={...process.env,
+            FIRESTORE_EMULATOR_HOST:'127.0.0.1:8080',
+            VOLUNSERVE_QA_FIRESTORE_RULES_FILE:'firebase.json',
+            VOLUNSERVE_QA_EXPECTED_RULES_SHA256:'0'.repeat(64)};
+          const wrongHash=spawnSync(process.execPath,[script],{env,encoding:'utf8',timeout:15000});
+          assert.notEqual(wrongHash.status,0,'Bad hash must fail closed');
+          assert.match(wrongHash.stderr,/Deployed rules fixture hash mismatch/);
+          delete env.VOLUNSERVE_QA_EXPECTED_RULES_SHA256;
+          const incomplete=spawnSync(process.execPath,[script],{env,encoding:'utf8',timeout:15000});
+          assert.notEqual(incomplete.status,0,'Missing fingerprint must fail closed');
+          assert.match(incomplete.stderr,/requires BOTH local file and expected SHA-256/);
+          console.log('PASS: unverified and incomplete deployed-rules replay fixtures rejected without connecting to any Firebase service');
+          NODE
       - name: Verify Residents, Admins, Volunteers and Firestore rules in emulator
         run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/test-emergency-manual-flow-emulator-20261125.cjs"
       - name: Export web bundle without deploying
