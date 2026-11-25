@@ -1,0 +1,105 @@
+name: Original AI Real Node Status -> Native Recovery E2E (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-native-real-status-e2e-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-status-e2e:
+    name: Deployed Node GET + restored TS client + Native recovery + Firebase emulators
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-volunserve-original-ai-native-status
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-original-ai-native-status
+      GOOGLE_APPLICATION_CREDENTIALS: ''
+      FIREBASE_SERVICE_ACCOUNT_JSON: ''
+      CLOUDINARY_API_KEY: ''
+      CLOUDINARY_API_SECRET: ''
+      IDENTITY_AI_INTERNAL_KEY: ''
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch exact deployed source and synthetic QA script (NO CHECKOUT)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs');
+            const path=require('node:path');
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='28666b78d95b60ed77645488fa00a57aff1506d3';
+            const cmp=await github.rest.repos.compareCommits({
+              owner,repo,base,head:context.sha
+            });
+            assert.equal(cmp.data.behind_by,0);
+            assert.deepEqual((cmp.data.files||[]).map(f=>f.filename).sort(),[
+              '.github/workflows/qa-original-ai-native-real-status-e2e-20261125.yml',
+              'scripts/qa-original-ai-native-real-status-e2e-20261125.cjs'
+            ].sort(),'Only two QA-only files may change on this candidate');
+            const files=[
+              ['backend/server.js','d06aeb1e0a572bf8581a99d7064da0a8d2430ed4'],
+              ['backend/verifiedFirebaseToken.js','d06aeb1e0a572bf8581a99d7064da0a8d2430ed4'],
+              ['lib/identityVerification.ts','5af28d279618dacd5eab518e5e0d52259eae8844'],
+              ['app/identity-verification.tsx',base],
+              ['scripts/qa-original-ai-native-real-status-e2e-20261125.cjs',context.sha]
+            ];
+            for(const [filename,ref] of files){
+              const {data}=await github.rest.repos.getContent({
+                owner,repo,path:filename,ref
+              });
+              if(Array.isArray(data)||data.encoding!=='base64')
+                throw Error('Exact pinned file missing: '+filename);
+              const dest=path.join(process.env.GITHUB_WORKSPACE,'.qa-status',
+                filename.startsWith('scripts/')?'test-status.js':filename);
+              fs.mkdirSync(path.dirname(dest),{recursive:true});
+              fs.writeFileSync(dest,Buffer.from(data.content,'base64'));
+              core.info('Pinned read-only source '+filename+' @ '+ref.slice(0,10));
+            }
+            core.info('PASS: 2 QA-only changes, no production/staging checkout, deploy or secrets');
+      - name: Install Node test runtime and deny-all Firestore client rules
+        run: |
+          npm install --prefix .qa-status --no-save --no-audit --no-fund --ignore-scripts \
+            express@5.1.0 firebase-admin@14.3.0 firebase-tools@14 typescript@5.9.3
+          node --check .qa-status/test-status.js
+          node - <<'NODE'
+          const fs=require('node:fs');
+          fs.writeFileSync('.qa-status/emulators.json',JSON.stringify({
+            emulators:{
+              auth:{host:'127.0.0.1',port:9099},
+              firestore:{host:'127.0.0.1',port:8080},
+              ui:{enabled:false}
+            },
+            firestore:{rules:'firestore.rules'}
+          },null,2));
+          fs.writeFileSync('.qa-status/firestore.rules',
+            'rules_version = "2";\nservice cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if false; } } }\n');
+          console.log('PASS: localhost-only DEMO Firebase/Auth and deny-all client rules');
+          NODE
+      - name: Execute REAL Node status + real client + QA native handler in emulator
+        run: |
+          test "$GCLOUD_PROJECT" = demo-volunserve-original-ai-native-status
+          test -z "$GOOGLE_APPLICATION_CREDENTIALS"
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$CLOUDINARY_API_KEY"
+          test -z "$CLOUDINARY_API_SECRET"
+          test -z "$IDENTITY_AI_INTERNAL_KEY"
+          .qa-status/node_modules/.bin/firebase \
+            emulators:exec \
+            --project demo-volunserve-original-ai-native-status \
+            --only auth,firestore \
+            --config .qa-status/emulators.json \
+            "node .qa-status/test-status.js"
+      - name: Confirm no provider access or deployments
+        run: |
+          echo "PASS NO DEPLOY: actual Node/TS client/Native code under synthetic Firebase emulators only"
+# This is not an Android device test or physical biometric calibration check.
+# It requires no real accounts, photos, production credentials or cloud writes.
