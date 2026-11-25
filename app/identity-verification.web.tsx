@@ -39,6 +39,9 @@ import {
     submitIdentityVerification,
 } from "../lib/identityVerification";
 
+// QA-only opt-in: historical National ID portrait vs selfie with NO OCR.
+// Disabled by default and never deployed to Hosting by this branch.
+const FACE_ONLY_MODE = process.env.EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true";
 const MEDIAPIPE_VERSION = "1.1.0";
 const MEDIAPIPE_MODULE_URL =
   `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -996,7 +999,7 @@ export default function IdentityVerificationWeb() {
                 setScanState(
                   tooFar ? "too_far" : "too_close",
                 );
-              } else if (movementRef.current.stage !== "complete") {
+              } else if (!FACE_ONLY_MODE && movementRef.current.stage !== "complete") {
                 // Camera-motion prompt only: replay or moved photo may still pass.
                 // Never treat this as validated liveness or presentation-attack detection.
                 const movement = movementRef.current;
@@ -1177,14 +1180,28 @@ export default function IdentityVerificationWeb() {
       setDocumentPrecheckMessage("Capture the front of your government ID first.");
       return;
     }
-    if (idType !== "passport" && !idBackDocument) {
+    if (!FACE_ONLY_MODE && idType !== "passport" && !idBackDocument) {
       setDocumentPrecheckMessage("Capture the reverse of your government ID before proceeding.");
       return;
     }
     if (!documentConsent) {
-      setDocumentPrecheckMessage(
-        "Please consent to uploading these ID photos for a preliminary OCR document check before opening the face camera.",
-      );
+      setDocumentPrecheckMessage(FACE_ONLY_MODE
+        ? "Consent to privately using your ID portrait for face comparison is required."
+        : "Please consent to uploading these ID photos for a preliminary OCR document check before opening the face camera.");
+      return;
+    }
+    if (FACE_ONLY_MODE) {
+      // Original face-only flow: skip OCR and text/name/birthday checks.
+      setDocumentPrecheckOutcome(null);
+      setDocumentPrecheckScreening(null);
+      setDocumentPrecheckMessage("");
+      setSelfie(null);
+      stopCamera();
+      setStep(2);
+      pendingFaceStartRef.current = setTimeout(() => {
+        pendingFaceStartRef.current = null;
+        void startCamera();
+      }, 250);
       return;
     }
     const revision = documentPrecheckRevisionRef.current;
@@ -1193,7 +1210,7 @@ export default function IdentityVerificationWeb() {
     setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("Checking the selected ID type, front/back arrangement and image quality...");
     try {
-      await checkIdentityEngineReady();
+      await checkIdentityEngineReady(FACE_ONLY_MODE);
       if (revision !== documentPrecheckRevisionRef.current) return;
       const result = await precheckIdentityDocument({
         idType, idDocument,
@@ -1280,7 +1297,7 @@ export default function IdentityVerificationWeb() {
       return;
     }
 
-    if (idType !== "passport" && !idBackDocument) {
+    if (!FACE_ONLY_MODE && idType !== "passport" && !idBackDocument) {
       setStep(1);
       setLocalMessage("The back-side ID scan is required before submission.");
       return;
@@ -1312,7 +1329,7 @@ export default function IdentityVerificationWeb() {
       setSubmissionError("");
       // Check the separate Render Python engine before private images
       // are uploaded or a limited AI attempt is consumed.
-      await checkIdentityEngineReady();
+      await checkIdentityEngineReady(FACE_ONLY_MODE);
       setStep(3);
       requestStarted = true;
 
@@ -1322,7 +1339,7 @@ export default function IdentityVerificationWeb() {
           idDocument,
           idBackDocument: idType === "passport" ? null : idBackDocument,
           selfie,
-        });
+        }, { faceOnly: FACE_ONLY_MODE });
 
       setRetryingFailed(false);
       setSubmittedIdPreviewUri(idDocument.uri);
@@ -1584,6 +1601,7 @@ export default function IdentityVerificationWeb() {
 
       {step === 1 ? (
         <UploadIdStep
+          faceOnlyMode={FACE_ONLY_MODE}
           idType={idType}
           setIdType={(value) => {
             if (idType !== value) {
@@ -1653,12 +1671,12 @@ export default function IdentityVerificationWeb() {
                 Real-time Face Scan
               </Text>
               <Text style={styles.stepSubtitle}>
-                VolunServe checks camera alignment, asks for a random sideways movement, then captures a still selfie. This is not validated anti-spoofing.
+                {FACE_ONLY_MODE ? "Your camera captures a clear selfie for the original 1-to-1 face comparison. No OCR, text check or validated anti-spoofing." : "VolunServe checks camera alignment, asks for a random sideways movement, then captures a still selfie. This is not validated anti-spoofing."}
               </Text>
             </View>
           </View>
 
-          {documentPrecheckScreening && documentPrecheckOutcome === "pass" ? (
+          {!FACE_ONLY_MODE && documentPrecheckScreening && documentPrecheckOutcome === "pass" ? (
             <View style={styles.idScanStepSuccess} accessibilityLabel="Completed preliminary document scan">
               <Ionicons name="checkmark-circle" size={18} color="#13724F" />
               <Text style={styles.idScanStepSuccessText}>National ID text readable</Text>
@@ -1821,10 +1839,10 @@ export default function IdentityVerificationWeb() {
                 passed={liveChecks.stable}
                 label="Face held still"
               />
-              <LiveCheck
+              {!FACE_ONLY_MODE ? <LiveCheck
                 passed={movementCompleted}
                 label="Movement prompt completed (not proof of liveness)"
-              />
+              /> : null}
 
               <View style={styles.guidanceCard}>
                 <Text
@@ -2142,6 +2160,7 @@ function WizardProgress({
 }
 
 function UploadIdStep({
+  faceOnlyMode,
   idType,
   setIdType,
   idDocument,
@@ -2170,6 +2189,7 @@ function UploadIdStep({
   onRemove,
   onRemoveBack,
 }: {
+  faceOnlyMode: boolean;
   idType: IdentityDocumentType;
   setIdType: (value: IdentityDocumentType) => void;
   idDocument: CapturedIdentityMedia | null;
@@ -2210,7 +2230,7 @@ function UploadIdStep({
         <View style={styles.stepHeaderCopy}>
           <Text style={styles.stepTitle}>Government ID Details</Text>
           <Text style={styles.stepSubtitle}>
-            Select your government-issued ID and provide clear photos of the front and back.
+            {faceOnlyMode ? "Capture the National ID portrait. AI compares only faces; Admin checks the ID independently." : "Select your government-issued ID and provide clear photos of the front and back."}
           </Text>
         </View>
       </View>
@@ -2250,6 +2270,8 @@ function UploadIdStep({
       <View style={[styles.idCaptureGrid, compactDesktop && styles.idCaptureGridDesktop]}>
       {([
         { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
+        // Keep the SAME side-by-side Front / Back ID cards as the live design.
+        // In original face-only mode the back card stays visible but is optional.
         ...(idType === "passport" ? [] : [
           { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
         ]),
@@ -2322,7 +2344,9 @@ function UploadIdStep({
                 {side === "front" ? "Front of National ID" : "Back of National ID"}
               </Text>
               <Text style={styles.idCaptureHint}>
-                Upload or capture the {side === "front" ? "front" : "back"} side of your National ID.
+                {faceOnlyMode && side === "back"
+                  ? "Optional for face comparison. An Admin may request the back for independent ID review."
+                  : `Upload or capture the ${side === "front" ? "front" : "back"} side of your National ID.`}
               </Text>
               <View style={styles.idCaptureActions}>
                 <TouchableOpacity accessibilityRole="button"
@@ -2354,13 +2378,12 @@ function UploadIdStep({
           {documentConsent ? <Ionicons name="checkmark" color="#FFFFFF" size={15} /> : null}
         </View>
         <Text style={styles.consentText}>
-          I consent to privately processing my ID front and back for OCR screening.
-          If unclear and referred to LGU Admin, those ID photos may be securely
-          retained for up to 30 days. No selfie is captured at this stage.
-          OCR does not confirm government ID authenticity.
+          {faceOnlyMode ?
+            "I consent to private processing of my National ID front (and optional back) and the selfie I will capture next for 1-to-1 face comparison and authorized Admin review. No OCR or ID-text scanning. Submitted photos may be retained securely for up to 30 days. Face matching alone does not authenticate the ID or grant Verified status." :
+            "I consent to privately processing my ID front and back for OCR screening. If unclear and referred to LGU Admin, those ID photos may be securely retained for up to 30 days. No selfie is captured at this stage. OCR does not confirm government ID authenticity."}
         </Text>
       </TouchableOpacity>
-      {documentPrecheckScreening ? (
+      {!faceOnlyMode && documentPrecheckScreening ? (
         <View style={styles.idScanResults} accessibilityLabel="Preliminary National ID scan results">
           <View style={styles.idScanResultsTitleRow}>
             <Ionicons name="scan-outline" size={17} color="#176847" />
@@ -2416,13 +2439,13 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            (!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking) && styles.disabledButton,
+            (!idDocument || (!faceOnlyMode && idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking) && styles.disabledButton,
           ]}
-          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking}
+          disabled={!idDocument || (!faceOnlyMode && idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
-            {documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
+            {faceOnlyMode ? "Continue to Face Scan" : documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
           </Text>
           <Ionicons
             name="arrow-forward"
@@ -2572,7 +2595,7 @@ function StatusScreen({
           {message}
         </Text>
 
-                <DocumentScreeningSummary screening={documentScreening} />
+                {!FACE_ONLY_MODE ? <DocumentScreeningSummary screening={documentScreening} /> : null}
 
         {idPreviewUri ? (
           <View style={styles.submittedIdCard}>
