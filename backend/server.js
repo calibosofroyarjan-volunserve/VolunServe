@@ -27,6 +27,7 @@ const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
 const { validateFaceOnlyReviewEvidence } = require("./identityFaceOnlyReviewEvidence");
 const { classifyHybridDocumentPrecheck } = require("./identityHybridPrecheckDecision");
 const { assessAutomaticIdentityApproval } = require("./identityAutoApprovalGateway");
+const { resolveTrustedAutomaticCompletion } = require("./identityTrustedAutomaticCompletion");
 const {
   parseConsentedIdentityEvidence,
   uploadIdentityEvidence,
@@ -5546,6 +5547,20 @@ app.post(
           consentedEvidenceAvailable: Boolean(newEvidenceAssets),
         },
       });
+      // Automatic promotion is a separate, default-OFF, server-side gate.
+      // It is impossible with the currently deployed original face-only AI:
+      // independent issuer/PAD validators and validated face proof are absent.
+      // Never use an AI JSON flag, numeric similarity or frontend field here.
+      const autoCompletion = resolveTrustedAutomaticCompletion({
+        enabled: process.env.VOLUNSERVE_TRUSTED_AUTO_VERIFY_ENABLED === "true",
+        faceOnly,
+        assessment: automaticApproval,
+        uid,
+        requestId,
+        verificationId,
+        screening: documentScreening,
+        assets: newEvidenceAssets,
+      });
 
       const outcome = await db.runTransaction(async (transaction) => {
         const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
@@ -5567,15 +5582,19 @@ app.post(
         const attemptCount = identityAttemptCount(current.aiAttemptCount) + 1;
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
-        const result = identityAttemptOutcome(decision, attemptCount);
+        const result = autoCompletion.eligible
+          ? {status:"verified", requiresManualReview:false}
+          : identityAttemptOutcome(decision, attemptCount);
         // An exhausted retry cycle is a separate Admin queue reason, even
         // if OCR already rejected the selected document. This never makes
         // an unsupported or unrecognized ID eligible for approval.
-        const finalReviewTrack = decision === "failed" &&
-          result.requiresManualReview
-          ? "three_failed_attempts"
-          : reviewTrack;
-        const resultMessage = faceOnly
+        const finalReviewTrack = autoCompletion.eligible ? "none" :
+          decision === "failed" && result.requiresManualReview
+            ? "three_failed_attempts"
+            : reviewTrack;
+        const resultMessage = autoCompletion.eligible
+          ? "Identity automatically verified using independently validated government ID, liveness and calibrated face matching."
+          : faceOnly
           ? !faceComparisonPassed
             ? (result.requiresManualReview
                 ? "Three original face comparisons were unsuccessful or inconclusive. Admin may review the case or authorize a new attempt, but cannot approve without a successful comparison and independent ID validation."
@@ -5621,7 +5640,7 @@ app.post(
           status: result.status,
           aiDecision: decision,
           faceComparisonPassed: faceOnly ? faceComparisonPassed : FieldValue.delete(),
-          decision: FieldValue.delete(),
+          decision: autoCompletion.eligible ? "verified" : FieldValue.delete(),
           manualReviewDecision: FieldValue.delete(),
           manualValidationMethod: FieldValue.delete(),
           manualReviewNotes: FieldValue.delete(),
@@ -5634,6 +5653,10 @@ app.post(
           // validators are integrated, any face match remains Pending.
           automaticVerificationEligible: automaticApproval.eligible,
           automaticVerificationReason: automaticApproval.reason,
+          automaticVerificationApplied: autoCompletion.eligible,
+          automaticVerificationCompletionReason: autoCompletion.reason,
+          automaticVerifiedAt: autoCompletion.eligible
+            ? FieldValue.serverTimestamp() : FieldValue.delete(),
           documentScreening,
           reviewTrack: finalReviewTrack,
           // Public reviews expose only availability; actual Cloudinary IDs live
@@ -5673,6 +5696,7 @@ app.post(
             attemptCycle,
             aiDecision: decision,
             faceComparisonPassed: faceOnly ? faceComparisonPassed : false,
+            automaticVerificationApplied: autoCompletion.eligible,
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
@@ -5683,25 +5707,45 @@ app.post(
           },
         );
 
-        // No AI decision, including a synthetic or future "verified"
-        // response, can write identityVerified=true to the Resident profile.
+        // Only independently authenticated issuer/PAD + calibrated face proof
+        // may finish an identity automatically. Original face-only submissions
+        // always remain Admin-gated regardless of match score or photo clarity.
         transaction.set(userRef, {
             identityStatus: result.status,
-            identityVerified: false,
+            identityVerified: autoCompletion.eligible,
             identityVerificationProvider: FieldValue.delete(),
             identityVerificationSessionId: FieldValue.delete(),
-            identityVerificationMethod: faceOnly ? "volunserve_ai_face_only" : "volunserve_ai",
+            identityVerificationMethod: autoCompletion.eligible
+              ? "volunserve_trusted_provider_automatic"
+              : faceOnly ? "volunserve_ai_face_only" : "volunserve_ai",
+            identityVerifiedAt: autoCompletion.eligible
+              ? FieldValue.serverTimestamp() : FieldValue.delete(),
+            identityVerifiedBy: autoCompletion.eligible
+              ? "trusted_independent_provider_auto" : FieldValue.delete(),
             identityVerificationStartedAt: FieldValue.serverTimestamp(),
             identityFailureReason: decision === "failed" && !result.requiresManualReview
               ? resultMessage : FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
           }, { merge: true });
+        if (autoCompletion.eligible) {
+          // Record automated grant atomically; do not persist face images,
+          // government ID numbers, or any unsigned provider response.
+          transaction.create(
+            db.collection("identityAutomationEvents").doc(`${uid}_${requestId}`),
+            {uid, requestId, verificationId, decision:"trusted_auto_verified",
+              proofSource:"independent_issuer_pad_and_calibrated_face",
+              createdAt:FieldValue.serverTimestamp()},
+          );
+        }
         return {
-          ok: true, status: result.status, verificationId, decision,
+          ok: true, status: result.status,
+          decision: autoCompletion.eligible ? "verified" : decision,
           faceComparisonPassed: faceOnly ? faceComparisonPassed : null,
           matchScore, livenessScore, documentScreening, reviewTrack: finalReviewTrack, message: resultMessage,
           automaticVerificationEligible: automaticApproval.eligible,
           automaticVerificationReason: automaticApproval.reason,
+          automaticVerificationApplied: autoCompletion.eligible,
+          automaticVerificationCompletionReason: autoCompletion.reason,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
