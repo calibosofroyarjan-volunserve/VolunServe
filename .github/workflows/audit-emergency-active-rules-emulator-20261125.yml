@@ -17,6 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: false
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -44,6 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: false
           persist-credentials: false
       - uses: actions/setup-node@v4
