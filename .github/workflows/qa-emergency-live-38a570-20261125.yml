@@ -63,7 +63,24 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-      - name: Fail closed if public Hosting release marker has changed
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Emergency Response source and 100 m GPS contracts
+        run: node --test scripts/test-emergency-live-reconciled-20261125.cjs
+      - name: Verify TypeScript
+        run: npx tsc --noEmit --pretty false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Verify Residents, Admins, Volunteers and Firestore rules in emulator
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/test-emergency-manual-flow-emulator-20261125.cjs"
+      - name: Export web bundle without deploying
+        run: npx expo export --platform web --output-dir dist
+      # This is deliberately LAST. Isolated tests still execute on a frozen
+      # Draft candidate even when production moves, but the overall job FAILS.
+      # Never use a test-only success as production release authorization.
+      - name: Release BLOCKER — fail closed if Hosting revision changed
         shell: bash
         run: |
           node <<'NODE'
@@ -83,17 +100,3 @@ jobs:
             console.log("PASS: live Hosting still reports frozen 38a570 snapshot");
           })().catch(error=>{console.error(error);process.exitCode=1});
           NODE
-      - name: Install project dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Emergency Response source and 100 m GPS contracts
-        run: node --test scripts/test-emergency-live-reconciled-20261125.cjs
-      - name: Verify TypeScript
-        run: npx tsc --noEmit --pretty false
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - name: Verify Residents, Admins, Volunteers and Firestore rules in emulator
-        run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/test-emergency-manual-flow-emulator-20261125.cjs"
-      - name: Export web bundle without deploying
-        run: npx expo export --platform web --output-dir dist
