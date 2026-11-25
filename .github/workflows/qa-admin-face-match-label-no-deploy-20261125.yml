@@ -1,0 +1,76 @@
+name: QA Admin Face Match Label (NO DEPLOY)
+on:
+  push:
+    branches: [qa/identity-admin-face-match-label-20261125]
+    paths:
+      - app/(admin)/identity-reviews.tsx
+      - .github/workflows/qa-admin-face-match-label-no-deploy-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  face-match-label-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Fail closed if this is not exactly the live UI baseline plus one file
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='75508bb5e1c16f53d7d90a2abecbd0005ebd5858';
+          const git=(...argv)=>cp.execFileSync('git',argv,{encoding:'utf8'}).trim();
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          cp.execFileSync('git',['diff','--check',base,'HEAD']);
+          assert.deepEqual(git('diff','--name-only',base,'HEAD').split('\n').sort(),[
+            '.github/workflows/qa-admin-face-match-label-no-deploy-20261125.yml',
+            'app/(admin)/identity-reviews.tsx',
+          ].sort());
+          console.log('PASS: live baseline, only Admin label UI changed');
+          JS
+      - name: Ensure no percentages, fake match results or privilege changes
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const ui=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+          const checks=[
+            ['Main result label is Face Match',ui.includes('const faceMatchLabel = item.faceComparisonPassed === true') && ui.includes('? "Face Match"')],
+            ['Failed or uncertain result never represented as a match',ui.includes('"Match Not Confirmed"') && ui.includes('"Not Evaluated"')],
+            ['Face status remains explicitly preliminary',ui.includes('Preliminary face comparison passed. Independent Admin ID validation is still required.')],
+            ['Main UI renders outcome instead of score',ui.includes('{faceMatchLabel}') && !ui.includes('{faceScore}')],
+            ['Checklist uses no similarity percentage',ui.includes('Face match detected — independent Admin review required') && !ui.includes('faceScore + " preliminary similarity"')],
+            ['No old percentage format code',!ui.includes('(item.matchScore * 100).toFixed(1) + "%"')],
+            ['Original matching pass comes only from backend',ui.includes('item.faceComparisonPassed === true')],
+            ['Explicit Admin issuer validation required',ui.includes('!issuerReviewAttested') && ui.includes('validationMethod')],
+            ['Actual private front/selfie load required',ui.includes('loadedEvidenceUris.front === evidenceUris.front') && ui.includes('loadedEvidenceUris.selfie === evidenceUris.selfie')],
+            ['Links expire independently',ui.includes('evidenceExpiresAt * 1000 > Date.now()')],
+            ['Protected images require authenticated Admin',ui.includes('getIdToken(true)') && ui.includes('/api/admin/identity/reviews/')],
+            ['No client-side auto Verified Resident promotion',!ui.includes('identityVerified: true,')],
+          ];
+          for(const [label,passed] of checks){assert.equal(passed,true,label);console.log('PASS:',label);}
+          console.log('No ID files, biometrics, Firebase record writes, Render or Hosting deploy');
+          JS
+      - name: TypeScript check with original AI mode
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Build web only (do not publish)
+        run: |
+          npx expo export --platform web --output-dir dist
+          test -f dist/index.html
+          echo 'PASS: compiled Admin result labels; no deployment'
+# Source/UI regression only. The existing backend comparison and Admin decision
+# guards remain authoritative; we neither modify nor re-evaluate face scores.
