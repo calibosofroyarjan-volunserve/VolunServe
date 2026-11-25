@@ -71,10 +71,10 @@ const modules=[
   getRoute("get","/api/admin/identity/reviews","/api/admin/identity/reviews/:uid/evidence"),
   getRoute("post","/api/admin/identity/reviews/:uid/decision","/api/admin/assistance/requests/:requestId/start-review"),
 ];
-assert.ok(modules[8].includes("requireOperationalAdmin") &&
-          modules[9].includes("self_identity_review_forbidden") &&
-          modules[9].includes("reviewIssuerEvidence(") &&
-          modules[9].includes("db.runTransaction("),
+assert.ok(modules[7].includes("requireOperationalAdmin") &&
+          modules[8].includes("self_identity_review_forbidden") &&
+          modules[8].includes("reviewIssuerEvidence(") &&
+          modules[8].includes("db.runTransaction("),
   "Refusing test of detached or substituted Admin logic");
 vm.runInNewContext(modules.join("\n"),{
   app,db,auth,FieldValue,console,
