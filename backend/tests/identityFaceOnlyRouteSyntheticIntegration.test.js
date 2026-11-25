@@ -177,7 +177,9 @@ async function mustBlock(label, options, expectedCode, expectedReason){
     assert.equal(r.code,expectedCode);
     assert.equal(r.body?.error,expectedReason);
     assert.equal(r.writes.length,0,"Failed attempt must not write ANY record");
-    assert.equal(r.state.users[USER].identityVerified,false);
+    // A blocked request must NEVER mutate the resident's existing state.
+    // The already-Verified scenario starts true and correctly stays true.
+    assert.equal(r.state.users[USER].identityVerified,options.data?.user?.identityVerified===true);
   });
 }
 (async()=>{
