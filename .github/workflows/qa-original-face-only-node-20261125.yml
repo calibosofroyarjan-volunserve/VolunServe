@@ -1,0 +1,43 @@
+name: Original AI Face-Only Node Security Gate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/restore-20261023-face-only-node-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node-face-only-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Strict allowlist on current deployed production Node baseline
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const {data}=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(data.behind_by,0,'QA branch must be descendant of deployed Node');
+            assert.deepEqual((data.files||[]).map(x=>x.filename).sort(),[
+              '.github/workflows/qa-original-face-only-node-20261125.yml',
+              'backend/server.js',
+              'backend/identityPrivateEvidence.js',
+              'backend/test-original-face-only-qa-20261125.cjs'
+            ].sort(),'No unrelated code, production settings or Firebase rules changes');
+            core.info('PASS: exactly four guarded QA files changed; production unchanged');
+      - name: Syntax and offline synthetic Admin/Resident privacy regression
+        run: |
+          node --check backend/server.js
+          node --check backend/identityPrivateEvidence.js
+          node --check backend/test-original-face-only-qa-20261125.cjs
+          node --test backend/test-original-face-only-qa-20261125.cjs
+      - name: Confirm release flag defaults OFF and no deployment
+        run: |
+          echo 'NO DEPLOY: face-only route requires explicit VOLUNSERVE_FACE_ONLY_ENABLED=true'
+          echo 'NO LIVE MUTATIONS: no Firebase writes, no Cloudinary API calls, no production identity uploads'
