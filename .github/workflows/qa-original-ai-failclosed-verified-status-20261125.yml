@@ -49,6 +49,9 @@ jobs:
             const files=[
               ['backend/server.js',context.sha],
               ['backend/verifiedFirebaseToken.js','d06aeb1e0a572bf8581a99d7064da0a8d2430ed4'],
+              ['backend/adminAccess.js','d06aeb1e0a572bf8581a99d7064da0a8d2430ed4'],
+              ['backend/selectedIdPolicy.js','d06aeb1e0a572bf8581a99d7064da0a8d2430ed4'],
+              ['backend/identityIssuerReviewPolicy.js','d06aeb1e0a572bf8581a99d7064da0a8d2430ed4'],
               ['lib/identityVerification.ts','5af28d279618dacd5eab518e5e0d52259eae8844'],
               ['app/identity-verification.tsx','28666b78d95b60ed77645488fa00a57aff1506d3'],
               ['scripts/qa-original-ai-failclosed-verified-status-20261125.cjs',context.sha]
