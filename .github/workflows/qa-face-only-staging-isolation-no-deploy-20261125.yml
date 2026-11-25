@@ -1,0 +1,57 @@
+name: Original Face-Only AI Staging Isolation Guard (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-face-only-staging-isolation-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-provenance-fail-closed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact identity-only changes from most recent GREEN Node face-only candidate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='9ac3f9401c13a2807fd055de49ec26c71f13635f';
+            const expected=[
+              '.github/workflows/qa-face-only-staging-isolation-no-deploy-20261125.yml',
+              'backend/firebaseAdmin.js',
+              'backend/stagingOriginalAiIsolationPolicy.js',
+              'scripts/qa-original-ai-staging-startup-failclosed-20261125.cjs',
+            ].sort();
+            const r=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(r.data.behind_by,0,'Staging guard cannot roll back face-only Node candidate');
+            assert.deepEqual((r.data.files||[]).map(x=>x.filename).sort(),expected,
+              'No changes permitted to face matcher, routes, rules, live app or user data');
+            core.info('PASS: original face-only Node routes and Admin policy byte-for-byte unchanged');
+      - name: Syntax and existing offline private evidence and Admin-review tests
+        run: |
+          node --check backend/server.js
+          node --check backend/firebaseAdmin.js
+          node --check backend/stagingOriginalAiIsolationPolicy.js
+          node --check scripts/qa-original-ai-staging-startup-failclosed-20261125.cjs
+          node --test backend/test-original-face-only-qa-20261125.cjs
+      - name: Check 49 stage-only synthetic startup scenarios before Firebase SDK init
+        run: |
+          mkdir -p .qa-safe/backend
+          cp backend/firebaseAdmin.js .qa-safe/backend/firebaseAdmin.js
+          cp backend/stagingOriginalAiIsolationPolicy.js .qa-safe/backend/stagingOriginalAiIsolationPolicy.js
+          cp scripts/qa-original-ai-staging-startup-failclosed-20261125.cjs .qa-safe/test-startup.js
+          node .qa-safe/test-startup.js
+      - name: Scope of successful checks
+        run: |
+          echo 'PASS: offline Firebase service-account project/key mismatch fails closed before initializing SDK'
+          echo 'PASS: production Cloudinary/Firebase key reuse, implicit Google/Cloudinary env overrides rejected on staging'
+          echo 'PASS: staging Node cannot use production Python internal endpoint or reused private key'
+          echo 'PASS: unchanged production Firebase initialization and face-only route remains backward-compatible'
+          echo 'BLOCKED: actual hosted staging credential ownership and Cloudinary provider authentication still unverified'
+          echo 'NO DEPLOY, NO LIVE DATA, NO SECRETS, NO PROVIDER API CALL, NO PAID SERVICE'
