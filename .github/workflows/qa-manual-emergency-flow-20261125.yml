@@ -5,6 +5,7 @@ on:
       - fix/restore-manual-volunteer-no-barangay-20261125
     paths:
       - "app/(admin)/admin-cases.tsx"
+      - "app/(tabs)/disaster-response.tsx"
       - "app/(tabs)/volunteer.tsx"
       - "app/(tabs)/volunteer.web.tsx"
       - "components/tabs/ResponseFlow.web.tsx"
