@@ -1671,7 +1671,7 @@ export default function IdentityVerificationWeb() {
                 Real-time Face Scan
               </Text>
               <Text style={styles.stepSubtitle}>
-                VolunServe checks camera alignment, asks for a random sideways movement, then captures a still selfie. This is not validated anti-spoofing.
+                {FACE_ONLY_MODE ? "Your camera captures a clear selfie for the original 1-to-1 face comparison. No OCR, text check or validated anti-spoofing." : "VolunServe checks camera alignment, asks for a random sideways movement, then captures a still selfie. This is not validated anti-spoofing."}
               </Text>
             </View>
           </View>
@@ -2160,6 +2160,7 @@ function WizardProgress({
 }
 
 function UploadIdStep({
+  faceOnlyMode,
   idType,
   setIdType,
   idDocument,
@@ -2188,6 +2189,7 @@ function UploadIdStep({
   onRemove,
   onRemoveBack,
 }: {
+  faceOnlyMode: boolean;
   idType: IdentityDocumentType;
   setIdType: (value: IdentityDocumentType) => void;
   idDocument: CapturedIdentityMedia | null;
@@ -2228,7 +2230,7 @@ function UploadIdStep({
         <View style={styles.stepHeaderCopy}>
           <Text style={styles.stepTitle}>Government ID Details</Text>
           <Text style={styles.stepSubtitle}>
-            Select your government-issued ID and provide clear photos of the front and back.
+            {faceOnlyMode ? "Capture the National ID portrait. AI compares only faces; Admin checks the ID independently." : "Select your government-issued ID and provide clear photos of the front and back."}
           </Text>
         </View>
       </View>
@@ -2268,7 +2270,7 @@ function UploadIdStep({
       <View style={[styles.idCaptureGrid, compactDesktop && styles.idCaptureGridDesktop]}>
       {([
         { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
-        ...(idType === "passport" ? [] : [
+        ...(faceOnlyMode || idType === "passport" ? [] : [
           { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
         ]),
       ]).map(({ side, label, media, open, remove }) => (
@@ -2372,13 +2374,12 @@ function UploadIdStep({
           {documentConsent ? <Ionicons name="checkmark" color="#FFFFFF" size={15} /> : null}
         </View>
         <Text style={styles.consentText}>
-          I consent to privately processing my ID front and back for OCR screening.
-          If unclear and referred to LGU Admin, those ID photos may be securely
-          retained for up to 30 days. No selfie is captured at this stage.
-          OCR does not confirm government ID authenticity.
+          {faceOnlyMode ?
+            "I consent to private processing of my National ID portrait for 1-to-1 face comparison, with no OCR or ID-text scanning. Consented photos may be retained up to 30 days for Admin review. Face matching alone does not authenticate an ID or grant Verified status." :
+            "I consent to privately processing my ID front and back for OCR screening. If unclear and referred to LGU Admin, those ID photos may be securely retained for up to 30 days. No selfie is captured at this stage. OCR does not confirm government ID authenticity."}
         </Text>
       </TouchableOpacity>
-      {documentPrecheckScreening ? (
+      {!faceOnlyMode && documentPrecheckScreening ? (
         <View style={styles.idScanResults} accessibilityLabel="Preliminary National ID scan results">
           <View style={styles.idScanResultsTitleRow}>
             <Ionicons name="scan-outline" size={17} color="#176847" />
@@ -2434,13 +2435,13 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            (!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking) && styles.disabledButton,
+            (!idDocument || (!faceOnlyMode && idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking) && styles.disabledButton,
           ]}
-          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking}
+          disabled={!idDocument || (!faceOnlyMode && idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
-            {documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
+            {faceOnlyMode ? "Continue to Face Scan" : documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
           </Text>
           <Ionicons
             name="arrow-forward"
