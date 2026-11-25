@@ -722,7 +722,8 @@ function ReviewDetail({
   // Only an Admin who independently attests the real National ID may approve.
   const faceOnlyReview = item.verificationMethod === "volunserve_ai_face_only";
   const eligibleFaceOnly = faceOnlyReview && nationalId &&
-    item.aiDecision === "verified" && item.evidenceAvailable === true;
+    (item.aiDecision === "verified" || item.aiDecision === "manual_review") &&
+    item.evidenceAvailable === true;
   const cannotApprove = blurry ||
     (faceOnlyReview ? !eligibleFaceOnly : !recognized) ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
