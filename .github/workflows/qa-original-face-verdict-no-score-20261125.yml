@@ -1,0 +1,55 @@
+name: QA Face Match Verdict UI - No Score / NO DEPLOY
+on:
+  push:
+    branches: [qa/identity-face-verdict-no-score-hosting-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Protected published revision scope guard
+        run: |
+          set -eu
+          node <<'JS'
+          const cp=require('node:child_process'),a=require('node:assert/strict');
+          const base='a35d708829047fe86f04d988ad21966457ccbdea';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          cp.execFileSync('git',['diff','--check',base,'HEAD']);
+          const files=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          a.deepEqual(files,[
+            '.github/workflows/qa-original-face-verdict-no-score-20261125.yml',
+            'app/(admin)/identity-reviews.tsx',
+            'app/identity-verification.web.tsx',
+            'app/identity-verification.tsx',
+            'lib/identityVerification.ts',
+            'scripts/test-identity-face-verdict-no-score-20261125.cjs'
+          ].sort(),'Out-of-scope files would overwrite newer features');
+          JS
+      - name: Compare exact face result contract and existing Admin gates
+        run: node scripts/test-identity-face-verdict-no-score-20261125.cjs
+      - name: Compile and export actual production-mode Expo site
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Check LIVE published revision has not moved
+        run: VOLUNSERVE_EXPECTED_SHA=a35d708829047fe86f04d988ad21966457ccbdea node scripts/check-live-hosting.cjs
+      - name: NO DEPLOY
+        run: echo 'QA ONLY: no live change'

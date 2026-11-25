@@ -1364,6 +1364,7 @@ export default function IdentityVerificationWeb() {
         identityVerified: result.status === "verified",
         verificationId: result.verificationId,
         decision: result.decision,
+        faceComparisonPassed: result.faceComparisonPassed,
         matchScore: result.matchScore,
         livenessScore: result.livenessScore,
         documentScreening: result.documentScreening,
@@ -1551,7 +1552,9 @@ export default function IdentityVerificationWeb() {
         idPreviewLabel={selectedIdLabel}
         documentScreening={originalFaceOnlyPending ? undefined : statusResult?.documentScreening}
         notice={originalFaceOnlyPending
-          ? "Face-only mode did not perform OCR or authenticate the National ID. Your scan remains pending independent Admin inspection."
+          ? statusResult?.faceComparisonPassed === true
+            ? "Face Match Detected — preliminary comparison only. Independent Admin ID review is still required; no OCR or validated liveness was performed."
+            : "Face-only mode did not perform OCR or authenticate the National ID. Your scan remains pending independent Admin inspection."
           : undefined}
         feedback={statusFeedback}
         primaryLabel={
@@ -2533,7 +2536,7 @@ function AiVerificationStep({
         </Text>
         <Text style={styles.aiText}>
           Checking image quality, detecting facial landmarks,
-          and calculating the private 1-to-1 match score.
+          and checking whether the ID portrait and captured selfie match.
         </Text>
 
         <View style={styles.progressTrack}>

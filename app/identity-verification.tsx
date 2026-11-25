@@ -2196,7 +2196,7 @@ function AiVerificationStep({
           }
         >
           Checking image quality, detecting facial landmarks, and
-          calculating a private match score.
+          checking whether the ID portrait and captured selfie match.
         </Text>
 
         <View

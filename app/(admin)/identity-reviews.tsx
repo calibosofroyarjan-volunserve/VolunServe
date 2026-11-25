@@ -781,9 +781,13 @@ function ReviewDetail({
   const cannotApprove = blurry ||
     (faceOnlyReview ? (!eligibleFaceOnly || !faceOnlyEvidenceReady) : !recognized) ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
-  const faceScore = typeof item.matchScore === "number" &&
-    Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
-    ? (item.matchScore * 100).toFixed(1) + "%" : "Not evaluated";
+  // Binary comparison result; old MediaPipe similarity is not calibrated.
+  const faceVerdict = item.verificationMethod === "volunserve_ai_ocr_manual_review"
+    ? "Not Performed"
+    : faceOnlyReview
+      ? item.faceComparisonPassed === true ? "Face Match" :
+        item.aiDecision === "failed" ? "No Match / Uncertain" : "Needs Review"
+      : "Needs Review";
   const declaredIdLabel = item.documentScreening?.declaredIdType === "national_id"
     ? "Philippine National ID" :
     String(item.documentScreening?.declaredIdType || "Unspecified").replace(/_/g, " ");
@@ -811,12 +815,9 @@ function ReviewDetail({
     },
     {
       name:"Face matching",
-      value:faceOnlyReview && item.faceComparisonPassed !== true
-        ? "Unsuccessful or uncertain comparison — request retry" :
-        faceScore === "Not evaluated" ? "Not yet evaluated" :
-        faceScore + " preliminary similarity",
+      value:faceVerdict,
       ok:false,
-      warning:false,
+      warning:faceOnlyReview && item.faceComparisonPassed !== true,
     },
   ];
   const openIssuerCheck = () => void Linking.openURL("https://everify.gov.ph/check");
@@ -849,8 +850,8 @@ function ReviewDetail({
             <Text style={styles.premiumCardTitle}>AI Verification Result</Text>
           </View>
           <View style={styles.premiumFaceResult}>
-            <Text style={styles.premiumFaceValue}>{faceScore}</Text>
-            <Text style={styles.premiumSubCopy}>Preliminary face similarity; not identity proof.</Text>
+            <Text style={styles.premiumFaceValue}>{faceVerdict}</Text>
+            <Text style={styles.premiumSubCopy}>Preliminary comparison only; independent ID authenticity and liveness review is required.</Text>
           </View>
           <View style={styles.premiumResultRow}>
             <Text style={styles.premiumResultLabel}>ID Quality</Text>

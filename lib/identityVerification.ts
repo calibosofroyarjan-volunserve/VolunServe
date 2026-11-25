@@ -108,6 +108,7 @@ export type IdentityVerificationStatusResult = {
   identityVerified: boolean;
   verificationId?: string;
   decision?: string;
+  faceComparisonPassed?: boolean;
   matchScore?: number;
   livenessScore?: number;
   documentScreening?: DocumentScreening;
@@ -118,6 +119,7 @@ export type IdentityVerificationResult = {
   status: "pending" | "verified" | "failed";
   verificationId?: string;
   decision?: string;
+  faceComparisonPassed?: boolean;
   matchScore?: number;
   livenessScore?: number;
   documentScreening?: DocumentScreening;
@@ -592,6 +594,8 @@ export const submitIdentityVerification = async (
     decision: body?.decision
       ? String(body.decision)
       : undefined,
+    faceComparisonPassed: typeof body?.faceComparisonPassed === "boolean"
+      ? body.faceComparisonPassed : undefined,
     matchScore: optionalNumber(
       body?.matchScore,
     ),
