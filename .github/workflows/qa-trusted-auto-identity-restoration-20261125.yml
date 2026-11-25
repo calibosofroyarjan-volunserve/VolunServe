@@ -10,6 +10,10 @@ on:
       - backend/TRUSTED-AUTO-VERIFICATION-INTEGRATION.md
       - backend/test-identityTrustedSignedProof.js
       - backend/test-identityAutomaticTransactionIntegration.js
+      - backend/test-identityRealFirestoreEmulator.js
+      - backend/qa-identity-firestore-emulator.json
+      - backend/qa-identity-firestore-emulator.rules
+      - .github/workflows/qa-trusted-auto-firestore-emulator-20261125.yml
       - backend/test-identityAutoApprovalGateway.js
       - backend/test-identity-final-admin-only.js
       - .github/workflows/qa-trusted-auto-identity-restoration-20261125.yml
@@ -48,6 +52,10 @@ jobs:
             'backend/TRUSTED-AUTO-VERIFICATION-INTEGRATION.md',
             'backend/test-identityTrustedSignedProof.js',
             'backend/test-identityAutomaticTransactionIntegration.js',
+            'backend/test-identityRealFirestoreEmulator.js',
+            'backend/qa-identity-firestore-emulator.json',
+            'backend/qa-identity-firestore-emulator.rules',
+            '.github/workflows/qa-trusted-auto-firestore-emulator-20261125.yml',
             'backend/test-identityAutoApprovalGateway.js',
             'backend/test-identity-final-admin-only.js',
           ].sort();
