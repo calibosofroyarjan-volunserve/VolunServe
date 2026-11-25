@@ -618,6 +618,10 @@ export default function VolunteerTasks() {
             }
           }
 
+          if (next === "completed" && (!caseId || !caseData)) {
+            throw new Error("The linked emergency case is unavailable. Refresh the task before marking it complete.");
+          }
+
           const patch:
             Record<string, any> = {
               status: next,
