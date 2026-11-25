@@ -94,7 +94,7 @@ jobs:
             assert.match(guardSource,/existing Firebase app project cannot be independently verified/);
             const nodeSource=fs.readFileSync('.qa-safe/backend/server.js','utf8');
             assert.match(nodeSource,/identityVerified:\s*accountApproved/);
-            assert.match(nodeSource,/profile\?\.identityVerified ===\s*true\s*&&/);
+            assert.match(nodeSource,/profile\s*\?\.identityVerified\s*===\s*true\s*&&/);
             core.info('PASS: exact previously tested Admin/Resident security code and staged Firebase guard combined');
       - name: Test startup guard against production Firebase-app reuse and stage key crossover
         run: |
