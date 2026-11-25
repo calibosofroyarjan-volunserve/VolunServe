@@ -15,7 +15,10 @@ const ts=require("typescript");
 const express=require("express");
 const {initializeApp,deleteApp}=require("firebase-admin/app");
 const {getAuth}=require("firebase-admin/auth");
-const {getFirestore}=require("firebase-admin/firestore");
+const {getFirestore,FieldValue}=require("firebase-admin/firestore");
+const {isOperationalAdminProfile}=require("./backend/adminAccess");
+const {selectedIdRecognized}=require("./backend/selectedIdPolicy");
+const {reviewIssuerEvidence}=require("./backend/identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken,isCompletedVolunServeProfile}=
   require("./backend/verifiedFirebaseToken");
 const project="demo-volunserve-original-ai-native-status";
@@ -33,6 +36,7 @@ const auth=getAuth(fbApp),db=getFirestore(fbApp);
 const deployedServer=fs.readFileSync(path.join(__dirname,"backend/server.js"),"utf8");
 const app=express();
 app.disable("x-powered-by");
+app.use(express.json({limit:"20kb"}));
 function section(a,b){
   const from=deployedServer.indexOf(a);
   const to=deployedServer.indexOf(b,from+a.length);
@@ -45,15 +49,22 @@ const code=[
   section("function normalizeIdDocumentScreening(","function getBearerToken("),
   section("function getBearerToken(","function getCloudinaryConfig("),
   section("async function loadUserProfile(","async function requireVerifiedResident("),
-  section('app.get(\n  "/api/identity/status"', 'app.post(\n  ["/api/identity/verify"')
+  section("async function requireOperationalAdmin(","function isVerifiedLguPersonnelProfile("),
+  section('app.get(\n  "/api/identity/status"', 'app.post(\n  ["/api/identity/verify"'),
+  section('app.post(\n  "/api/admin/identity/reviews/:uid/decision"', 'app.post(\n  "/api/admin/assistance/requests/:requestId/start-review"')
 ].join("\n");
 assert.match(code,/app\.get\(\s*"\/api\/identity\/status"/);
 assert.match(code,/requireFirebaseUser/);
 assert.match(code,/identityAttemptCount\(verification\.aiAttemptCount\)/);
+assert.match(code,/reviewIssuerEvidence\(\{/);
+assert.match(code,/requireOperationalAdmin/);
+assert.match(code,/identityVerified: true/);
 const install=new Function(
   "app","db","auth","isVerifiedFirebaseToken","isCompletedVolunServeProfile",
-  "MAX_IDENTITY_AI_ATTEMPTS","console",code);
-install(app,db,auth,isVerifiedFirebaseToken,isCompletedVolunServeProfile,3,console);
+  "MAX_IDENTITY_AI_ATTEMPTS","console","FieldValue","isOperationalAdminProfile",
+  "selectedIdRecognized","reviewIssuerEvidence",code);
+install(app,db,auth,isVerifiedFirebaseToken,isCompletedVolunServeProfile,3,console,
+  FieldValue,isOperationalAdminProfile,selectedIdRecognized,reviewIssuerEvidence);
 
 const clientSrc=fs.readFileSync(path.join(__dirname,"lib/identityVerification.ts"),"utf8");
 const nativeSrc=fs.readFileSync(path.join(__dirname,"app/identity-verification.tsx"),"utf8");
@@ -202,6 +213,15 @@ async function run(){
     const rollbackFailed=await register("synthetic_inconsistent_failed_qa");
     const unverified=await register("synthetic_email_unverified_status_qa",{verifiedEmail:false});
     const noProfile=await register("synthetic_missing_profile_status_qa",{withProfile:false});
+    const operationalAdmin=await register("synthetic_approved_admin_review_qa");
+    const pendingAdmin=await register("synthetic_unapproved_admin_review_qa");
+    const suspendedAdmin=await register("synthetic_suspended_admin_review_qa");
+    const superAdmin=await register("synthetic_superadmin_review_qa");
+    const volunteer=await register("synthetic_volunteer_review_qa");
+    const retryTarget=await register("synthetic_retry_review_target_qa");
+    const rejectTarget=await register("synthetic_reject_review_target_qa");
+    const ocrOnly=await register("synthetic_ocr_only_review_target_qa");
+    const unrecognized=await register("synthetic_unrecognized_review_target_qa");
     await setIdentity(pending.uid,"pending");
     await setIdentity(failed.uid,"failed");
     await setIdentity(approved.uid,"verified");
@@ -216,6 +236,33 @@ async function run(){
     await setIdentity(rollbackPending.uid,"verified");
     await db.collection("users").doc(rollbackPending.uid).update({identityVerified:false});
     await db.collection("identityVerifications").doc(rollbackPending.uid).update({status:"pending"});
+    await db.collection("users").doc(operationalAdmin.uid).update({
+      role:"admin",status:"approved",adminStatus:"active",fullName:"Synthetic QA LGU Admin"
+    });
+    await db.collection("users").doc(pendingAdmin.uid).update({
+      role:"admin",status:"pending",adminStatus:"pending"
+    });
+    await db.collection("users").doc(suspendedAdmin.uid).update({
+      role:"admin",status:"approved",adminStatus:"suspended"
+    });
+    await db.collection("users").doc(superAdmin.uid).update({
+      role:"superadmin",status:"approved"
+    });
+    await db.collection("users").doc(volunteer.uid).update({
+      role:"volunteer",status:"approved"
+    });
+    await setIdentity(retryTarget.uid,"pending");
+    await setIdentity(rejectTarget.uid,"pending");
+    await setIdentity(ocrOnly.uid,"pending",{
+      verificationMethod:"volunserve_ai_ocr_manual_review"
+    });
+    await setIdentity(unrecognized.uid,"pending",{
+      documentScreening:{
+        declaredIdType:"national_id",detectedIdType:null,
+        status:"unsupported",imageQualityStatus:"low",
+        warningCodes:["school_id_not_supported"]
+      }
+    });
     await setIdentity(rollbackFailed.uid,"verified");
     await db.collection("users").doc(rollbackFailed.uid).update({identityVerified:false});
     await db.collection("identityVerifications").doc(rollbackFailed.uid).update({status:"failed"});
@@ -349,6 +396,129 @@ async function run(){
     assert.equal(got.data.identityStatus,"verified");
     assert.equal(got.data.identityVerified,true);
     pass("Consistent Admin-approved status still accepted (nonbreaking)");
+
+
+    // The REAL deployed LGU decision handler and authorization middleware,
+    // using the fail-closed status candidate and genuine Firebase transactions.
+    const reviewRoute=uid=>localBase()+"/api/admin/identity/reviews/"+uid+"/decision";
+    const manualApproval={
+      action:"verify",
+      validationMethod:"psa_national_id_qr_check",
+      issuerReviewAttested:true,
+      notes:"Synthetic QA independent PSA QR check attested without ID numbers."
+    };
+    const decision=async(token,uid,body=manualApproval)=>{
+      const response=await fetch(reviewRoute(uid),{
+        method:"POST",redirect:"error",
+        headers:{
+          "content-type":"application/json",
+          ...(token?{authorization:"Bearer "+token}:{})
+        },
+        body:JSON.stringify(body)
+      });
+      return {status:response.status,body:await response.json()};
+    };
+    const queued=await db.collection("identityVerifications").doc(pending.uid).get();
+    assert.equal(queued.data().status,"pending");
+    let outcome=await decision(null,pending.uid);
+    assert.equal(outcome.status,401);
+    pass("Admin decision endpoint blocks anonymous reviewer before Firestore writes");
+    outcome=await decision(pending.token,pending.uid);
+    assert.equal(outcome.status,403);
+    assert.equal(outcome.body.error,"operational_admin_required");
+    pass("Basic Resident cannot approve identity, even with forged independent issuer attestation");
+    outcome=await decision(volunteer.token,pending.uid);
+    assert.equal(outcome.status,403);
+    pass("Volunteer role cannot approve Resident identity");
+    outcome=await decision(pendingAdmin.token,pending.uid);
+    assert.equal(outcome.status,403);
+    pass("Pending/unapproved Admin cannot verify Resident identity");
+    outcome=await decision(suspendedAdmin.token,pending.uid);
+    assert.equal(outcome.status,403);
+    pass("Suspended Admin cannot verify Resident identity");
+    outcome=await decision(superAdmin.token,pending.uid);
+    assert.equal(outcome.status,403);
+    pass("Super Admin without operational Admin role cannot use LGU identity-review endpoint");
+    outcome=await decision(operationalAdmin.token,operationalAdmin.uid);
+    assert.equal(outcome.status,403);
+    assert.equal(outcome.body.error,"self_identity_review_forbidden");
+    pass("Operational Admin cannot approve own identity via decision endpoint");
+    outcome=await decision(operationalAdmin.token,pending.uid,{
+      ...manualApproval,issuerReviewAttested:false
+    });
+    assert.equal(outcome.status,400);
+    assert.equal(outcome.body.error,"independent_id_review_required");
+    pass("Valid Admin cannot verify without independent issuer-review attestation");
+    outcome=await decision(operationalAdmin.token,pending.uid,{
+      ...manualApproval,validationMethod:"generic_checkbox"
+    });
+    assert.equal(outcome.status,400);
+    pass("Invalid validation method rejected even for authorized operational Admin");
+    outcome=await decision(operationalAdmin.token,ocrOnly.uid);
+    assert.equal(outcome.status,409);
+    assert.equal(outcome.body.error,"ocr_only_review_requires_rescan");
+    pass("OCR-only manual-review case cannot be promoted without full face submission");
+    outcome=await decision(operationalAdmin.token,unrecognized.uid);
+    assert.equal(outcome.status,409);
+    assert.equal(outcome.body.error,"selected_government_id_not_recognized");
+    pass("School ID/unsupported recognition cannot be Admin approved");
+    assert.equal((await db.collection("users").doc(pending.uid).get()).data().identityVerified,false);
+    pass("Denied Admin actions leave Resident identityVerified=false");
+    outcome=await decision(operationalAdmin.token,pending.uid);
+    assert.equal(outcome.status,200,JSON.stringify(outcome.body));
+    assert.equal(outcome.body.status,"verified");
+    assert.equal(outcome.body.identityVerified,true);
+    const reviewedProfile=(await db.collection("users").doc(pending.uid).get()).data();
+    const reviewedCase=(await db.collection("identityVerifications").doc(pending.uid).get()).data();
+    assert.equal(reviewedProfile.identityStatus,"verified");
+    assert.equal(reviewedProfile.identityVerified,true);
+    assert.equal(reviewedProfile.identityVerifiedBy,operationalAdmin.uid);
+    assert.equal(reviewedCase.status,"verified");
+    assert.equal(reviewedCase.independentAdminCheckAttested,true);
+    assert.equal(reviewedCase.issuerApiAuthenticityVerified,false);
+    const logs=await db.collection("adminActivityLogs").where("residentUid","==",pending.uid).get();
+    assert.equal(logs.size,1);
+    pass("Authorized operational Admin transaction atomically sets both approval fields and audit log");
+    got=await callStatus(pending.token);
+    assert.equal(got.status,200);
+    assert.equal(got.data.identityStatus,"verified");
+    assert.equal(got.data.identityVerified,true);
+    const pApproved=await actualClientFor(pending.token)();
+    assert.equal(pApproved.identityStatus,"verified");
+    assert.equal(pApproved.identityVerified,true);
+    const approvedUI=await nativeAfterLostPost(pending.token);
+    assert.equal(last(approvedUI,"status").identityStatus,"verified");
+    pass("REAL Admin approval -> real Node status -> restored TS client -> Native shows Verified");
+    outcome=await decision(operationalAdmin.token,pending.uid);
+    assert.equal(outcome.status,409);
+    assert.equal(outcome.body.error,"identity_already_verified");
+    assert.equal((await db.collection("adminActivityLogs")
+      .where("residentUid","==",pending.uid).get()).size,1);
+    pass("Repeated operational Admin approval is denied with no duplicate audit event");
+    outcome=await decision(operationalAdmin.token,retryTarget.uid,{
+      action:"require_retry",notes:"Synthetic OCR too blurry for a full ID match."
+    });
+    assert.equal(outcome.status,200);
+    assert.equal(outcome.body.status,"failed");
+    const retryProfile=(await db.collection("users").doc(retryTarget.uid).get()).data();
+    const retryCase=(await db.collection("identityVerifications").doc(retryTarget.uid).get()).data();
+    assert.equal(retryProfile.identityStatus,"failed");
+    assert.equal(retryProfile.identityVerified,false);
+    assert.equal(retryCase.aiAttemptCount,0);
+    assert.equal(retryCase.manualReviewDecision,"retry_required");
+    got=await callStatus(retryTarget.token);
+    assert.equal(got.data.identityStatus,"failed");
+    assert.equal(got.data.identityVerified,false);
+    pass("Require Retry updates both Firestore records and Resident status to Failed without promotion");
+    outcome=await decision(operationalAdmin.token,rejectTarget.uid,{
+      action:"reject",notes:"Synthetic documents cannot establish current identity."
+    });
+    assert.equal(outcome.status,200);
+    assert.equal(outcome.body.identityVerified,false);
+    got=await callStatus(rejectTarget.token);
+    assert.equal(got.data.identityStatus,"failed");
+    assert.equal(got.data.identityVerified,false);
+    pass("Admin rejection keeps Resident unverified and updates actual status endpoint");
 
     const attempts=await db.collection("identityVerificationAttempts").get();
     assert.equal(attempts.size,0);
