@@ -111,7 +111,8 @@ test("incorrect private Node-Python key is rejected without reattempt",async()=>
     res.end(JSON.stringify({detail:"Unauthorized internal backend"}));
   },async endpoint=>{
     const {gateway}=makeGateway(endpoint,"SYNTHETIC_WRONG_KEY");
-    await assert.rejects(()=>gateway.callIdentityAiService(await mockForm(),{faceOnly:true}),
+    const data=await mockForm();
+    await assert.rejects(()=>gateway.callIdentityAiService(data,{faceOnly:true}),
       err=>err.statusCode===401);
   });
   assert.equal(count,1);
