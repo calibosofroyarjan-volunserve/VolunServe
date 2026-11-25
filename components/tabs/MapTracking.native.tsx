@@ -1573,6 +1573,30 @@ export default function MapTracking() {
           <Text style={{fontSize:11,color:"#47675C",marginTop:3}}>
             Only Responding/On Site locations are shared. Pin is last reported GPS, not verified arrival or guaranteed road ETA.
           </Text>
+          {visibleResidentVolunteerGps && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Locate assigned Volunteer on emergency map"
+              onPress={() => {
+                followUserRef.current = false;
+                mapRef.current?.animateCamera({
+                  center: {
+                    latitude: visibleResidentVolunteerGps.latitude,
+                    longitude: visibleResidentVolunteerGps.longitude,
+                  },
+                  zoom: 15,
+                  pitch: 0,
+                  heading: 0,
+                }, {duration: 450});
+              }}
+              style={{marginTop:7,alignSelf:"flex-start",backgroundColor:"#0D956F",
+                borderRadius:8,paddingVertical:7,paddingHorizontal:12}}
+            >
+              <Text style={{color:"#FFFFFF",fontSize:12,fontWeight:"700"}}>
+                Locate Assigned Volunteer
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
