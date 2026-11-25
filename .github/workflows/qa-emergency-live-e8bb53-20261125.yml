@@ -1,8 +1,5 @@
 name: QA Emergency current-live e8bb53 (NO DEPLOY)
 on:
-  push:
-    branches:
-      - fix/emergency-prod-e8bb53-20261125
   pull_request:
     branches:
       - snapshot/prod-hosting-e8bb53-20261125
