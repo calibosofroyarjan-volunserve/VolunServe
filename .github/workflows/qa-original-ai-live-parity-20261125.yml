@@ -1,0 +1,70 @@
+name: QA original AI parity against deployed Render commits (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-live-parity-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    name: Live Node identity routes and safety tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify Node application and identity files match deployed commit
+        run: |
+          git diff --exit-code d06aeb1e0a572bf8581a99d7064da0a8d2430ed4 HEAD -- backend/
+      - name: Syntax and live API contract check
+        run: |
+          node --check backend/server.js
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const s = fs.readFileSync('backend/server.js', 'utf8');
+          for (const route of [
+            '/api/identity/document/precheck-with-evidence',
+            '/api/identity/verify-with-evidence',
+            '/api/admin/identity/reviews/:uid/decision',
+          ]) assert.ok(s.includes(route), 'Missing protected identity route: ' + route);
+          assert.ok(s.includes('requireFirebaseUser'), 'Missing Firebase auth gateway');
+          assert.ok(s.includes('requireOperationalAdmin'), 'Missing restricted Admin gate');
+          assert.ok(s.includes('identityAttemptOutcome'), 'Missing Admin-only completion guard');
+          console.log('PASS: production source contains original identity routes and auth guards');
+          NODE
+      - name: Execute existing identity regression tests against exact deployed Node source
+        run: |
+          node --test             backend/test-identityHybridPrecheckDecision.js             backend/test-identityPrivateEvidence.js             backend/test-identity-final-admin-only.js             backend/test-identity-three-attempt-review.js             backend/test-identityPrecheckCors.js             backend/test-communityAttendanceGeofence.js
+  python:
+    name: Live Python government ID and face source tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 319152e6a1cad5e54653c20e87bd1551a82b219e
+          path: live-ai
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Confirm checkout is exactly Render private AI live commit
+        working-directory: live-ai
+        run: |
+          test "$(git rev-parse HEAD)" = "319152e6a1cad5e54653c20e87bd1551a82b219e"
+      - name: Compile live AI and verify original 1-to-1 matcher and private precheck
+        run: |
+          python -m py_compile live-ai/identity-ai/main.py live-ai/identity-ai/document_screening.py live-ai/identity-ai/profile_consistency.py
+          grep -Fq 'def run_face_verification(' live-ai/identity-ai/main.py
+          grep -Fq '@app.post("/document/precheck")' live-ai/identity-ai/main.py
+          grep -Fq 'school_id_not_supported' live-ai/identity-ai/document_screening.py
+      - name: Execute synthetic ID screening / profile tests
+        working-directory: live-ai/identity-ai
+        run: |
+          python -m unittest -v test_document_screening test_profile_consistency
+# Source-only QA: does not set secrets, call deployed APIs, upload media,
+# deploy services, access real users, or write to Firebase/Cloudinary.
