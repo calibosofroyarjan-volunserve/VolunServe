@@ -1,0 +1,55 @@
+name: QA Current Live 4e2c5b Face Match UI (NO DEPLOY)
+on:
+  push:
+    branches: [qa/identity-face-match-current-hosting-20261125]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-published-derived-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Immutable LIVE Hosting source, exact scoped files only
+        run: |
+          set -eu
+          node <<'JS'
+          const a=require('node:assert/strict'),cp=require('node:child_process');
+          const base='4e2c5b47872dc69a678d6235a34b29662a5c1089';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          cp.execFileSync('git',['diff','--check',base,'HEAD']);
+          const files=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          a.deepEqual(files,[
+            '.github/workflows/qa-face-match-current-live-20261125.yml',
+            'app/identity-verification.web.tsx',
+            'app/identity-verification.tsx',
+            'lib/identityVerification.ts',
+            'scripts/test-current-live-face-verdict-20261125.cjs'
+          ].sort(),'Forbidden change to Admin, backend, Firebase or other modules');
+          JS
+      - name: Assert existing Admin match and new Resident match UX
+        run: node scripts/test-current-live-face-verdict-20261125.cjs
+      - name: TypeScript and actual production Expo web artifact
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Live read-only published revision guard
+        run: VOLUNSERVE_EXPECTED_SHA=4e2c5b47872dc69a678d6235a34b29662a5c1089 node scripts/check-live-hosting.cjs
+      - name: No production changes
+        run: |
+          echo 'QA candidate only; no deployment'
