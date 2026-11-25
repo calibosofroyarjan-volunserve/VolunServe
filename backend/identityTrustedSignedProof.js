@@ -12,6 +12,9 @@ const AUDIENCE = "volunserve-trusted-identity-v1";
 const MAXIMUM_TOKEN_BYTES = 8192;
 const MAXIMUM_TTL_SECONDS = 180;
 const MAXIMUM_CLOCK_SKEW_SECONDS = 15;
+const SUPPORTED_ID_TYPES = new Set([
+  "national_id", "passport", "drivers_license", "umid", "prc_id",
+]);
 
 const SPECS = Object.freeze({
   issuer: {
@@ -57,12 +60,13 @@ function verifiedProviderPublicKey(pem) {
 }
 function verifyTrustedSignedProof({
   token, keyPem, provider, expectedIssuer, expectedKeyId,
-  uid, verificationId, requestId, nowMs = Date.now(),
+  uid, verificationId, requestId, documentType, nowMs = Date.now(),
 } = {}) {
   const reject = () => { throw new Error("independent_provider_proof_unverified"); };
   const spec = SPECS[provider];
   if (!spec || !validId(uid) || !validId(verificationId) ||
-      !validId(requestId) || !validId(expectedIssuer) ||
+      !validId(requestId) || !SUPPORTED_ID_TYPES.has(documentType) ||
+      !validId(expectedIssuer) ||
       !validId(expectedKeyId) || !Number.isFinite(nowMs)) reject();
   if (typeof token !== "string" || token.length > MAXIMUM_TOKEN_BYTES)
     reject();
@@ -86,7 +90,8 @@ function verifyTrustedSignedProof({
     const nowSeconds = Math.floor(nowMs / 1000);
     if (payload.iss !== expectedIssuer || payload.aud !== AUDIENCE ||
         payload.sub !== uid || payload.verificationId !== verificationId ||
-        payload.requestId !== requestId || payload.proofType !== provider ||
+        payload.requestId !== requestId ||
+        payload.documentType !== documentType || payload.proofType !== provider ||
         payload.proofKind !== spec.proofKind ||
         payload[spec.successClaim] !== true || !validId(payload.jti) ||
         !Number.isSafeInteger(payload.iat) ||
@@ -115,13 +120,14 @@ function verifyTrustedSignedProof({
  * not from a model flag or a resident profile.
  */
 function createTrustedSignedValidators({
-  issuerToken, padToken, uid, requestId, verificationId,
+  issuerToken, padToken, uid, requestId, verificationId, documentType,
   issuerKeyPem, padKeyPem,
   issuerName, padName,
   issuerKeyId, padKeyId,
   nowMs,
 } = {}) {
   if (!validId(uid) || !validId(requestId) || !validId(verificationId) ||
+      !SUPPORTED_ID_TYPES.has(documentType) ||
       !validId(issuerName) || !validId(padName) ||
       issuerName === padName || !validId(issuerKeyId) ||
       !validId(padKeyId))
@@ -139,7 +145,7 @@ function createTrustedSignedValidators({
         throw new Error("provider_proof_attempt_mismatch");
       return verifyTrustedSignedProof({
         token, keyPem, provider, expectedIssuer, expectedKeyId,
-        uid, requestId, verificationId, nowMs,
+        uid, requestId, verificationId, documentType, nowMs,
       });
     };
   }
