@@ -1,0 +1,48 @@
+name: Diagnose immutable Hosting rollback pin (READ ONLY)
+on:
+  push:
+    branches: [release/original-face-only-hosting-20261125]
+    paths: [.github/workflows/qa-original-ai-hosting-immutable-backup-20261125.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-hosting-rollback-pin:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check rollback selector with fictional data
+        run: node scripts/original-ai-hosting-pinned-rollback-20261125.cjs selftest
+      - name: Install existing repo dependencies only
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Read exact live Hosting immutable release using existing service account
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::Existing Hosting service account missing"; exit 1; }
+          node - <<'JS'
+          const fs=require('node:fs');
+          const o=JSON.parse(process.env.FIREBASE_SA);
+          if(o.type!=='service_account'||o.project_id!=='volunserve-3aa5b'||!o.private_key)
+            throw Error('BLOCKED: wrong Hosting project credentials');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/read-only-hosting-key.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS: existing Hosting credential targets pinned production project');
+          JS
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/read-only-hosting-key.json"
+          node scripts/original-ai-hosting-pinned-rollback-20261125.cjs capture "$RUNNER_TEMP/readonly-original-ai-hosting-version.json"
+          node scripts/original-ai-hosting-pinned-rollback-20261125.cjs check "$RUNNER_TEMP/readonly-original-ai-hosting-version.json"
+          echo 'PASS READ-ONLY: immutable original LIVE version pinned; no preview channel required'
+      - name: No writes
+        run: |
+          echo 'No Firebase Hosting POST/deploy, no other cloud writes, no ID images or credentials exposed'
