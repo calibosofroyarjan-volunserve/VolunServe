@@ -1,0 +1,74 @@
+name: Original AI production Cloudinary config presence audit (GET ONLY / NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-stage-live-contract-20261125
+    paths:
+      - .github/workflows/qa-original-ai-production-cloudinary-readiness-no-deploy-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-config-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify existing live Cloudinary implementation and public health only
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const base='539cd654b6c28c535063079be463f7bf46beb24f';
+            const live='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const only='.github/workflows/qa-original-ai-production-cloudinary-readiness-no-deploy-20261125.yml';
+            const compare=await github.rest.repos.compareCommits({owner,repo,base,head:context.sha});
+            assert.equal(compare.data.behind_by,0);
+            assert.deepEqual((compare.data.files||[]).map(x=>x.filename),[only]);
+            const fetchPinned=async(file)=>{
+              const r=await github.rest.repos.getContent({owner,repo,path:file,ref:live});
+              assert.equal(r.data.encoding,'base64');
+              return Buffer.from(r.data.content,'base64').toString('utf8');
+            };
+            const [server,evidence]=await Promise.all([
+              fetchPinned('backend/server.js'),
+              fetchPinned('backend/identityPrivateEvidence.js')
+            ]);
+            assert.match(server,/function getCloudinaryConfig\(\)/);
+            assert.match(server,/function configureCloudinary\(\)/);
+            assert.match(server,/CLOUDINARY_API_KEY/);
+            assert.match(server,/CLOUDINARY_API_SECRET/);
+            assert.match(server,/uploadIdentityEvidence\(/);
+            assert.match(evidence,/type: "authenticated"/);
+            assert.match(evidence,/cloudinary\.utils\.private_download_url/);
+            assert.match(evidence,/volunserve\/identity-private\//);
+            assert.match(evidence,/identityEvidenceRetentionDate/);
+            assert.match(evidence,/destroyIdentityEvidence/);
+            core.info('PASS: actual deployed Node already implements private authenticated identity Cloudinary storage and expiring Admin links');
+            const url='https://volunserve.onrender.com/health';
+            const ctrl=new AbortController();
+            const timeout=setTimeout(()=>ctrl.abort(),105000);
+            try {
+              // Only one unauthenticated GET. Never send credentials, ID, selfie or any mutation.
+              const response=await fetch(url,{
+                method:'GET',redirect:'manual',signal:ctrl.signal,
+                headers:{Accept:'application/json','User-Agent':'VolunServe-Cloudinary-ReadOnly-Check'}
+              });
+              if(response.status!==200){
+                core.warning('PRODUCTION_PUBLIC_HEALTH: status='+response.status+' (configuration unconfirmed)');
+              }else{
+                const data=await response.json();
+                const configured=data?.assistanceEvidenceStorage==='secure_cloudinary_configured';
+                const notConfigured=data?.assistanceEvidenceStorage==='secure_cloudinary_not_configured';
+                core.info('PRODUCTION_PUBLIC_HEALTH: HTTP=200 ok='+String(data?.ok===true)+' cloudinary_env_configured='+String(configured));
+                if(notConfigured)core.warning('Production Node health indicates Cloudinary API key/secret missing');
+                if(!configured&&!notConfigured)core.warning('Production health did not expose a recognized Cloudinary readiness flag');
+                if(configured)core.info('PASS: Cloudinary variables appear configured on production Node; provider upload not verified');
+              }
+            } catch(e){
+              core.warning('PRODUCTION_PUBLIC_HEALTH: unreachable; type='+String(e?.name||'unknown')+'; configuration unconfirmed');
+            } finally {
+              clearTimeout(timeout);
+            }
+            core.info('AUDIT: no production writes, no secret reads, no Cloudinary API calls, no test ID uploads, no deployments');
+            core.info('STAGING: never reuse production Cloudinary credentials, project or private photos for QA');
