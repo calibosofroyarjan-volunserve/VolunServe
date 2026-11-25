@@ -1358,6 +1358,7 @@ export function ResponsePanel({
               </button>
             ) : assignment.status ===
                 "responding" ? (
+              <>
               <button
                 className="primary-button"
                 disabled={flow.busy}
@@ -1371,6 +1372,7 @@ export function ResponsePanel({
                 Mark Arrived
               </button>
               <span role="status" className="task-gate-note">{proximityMessage}</span>
+              </>
             ) : assignment.status ===
                 "on_site" ? (
               <button
@@ -2171,6 +2173,7 @@ export function ResponsePanel({
 
                     {assignment.status ===
                       "responding" && (
+                      <>
                       <button
                         className="secondary-button"
                         disabled={
@@ -2187,6 +2190,7 @@ export function ResponsePanel({
                         arrived
                       </button>
                       <span role="status" className="task-gate-note">{proximityMessage}</span>
+                      </>
                     )}
 
                     {assignment.status ===
