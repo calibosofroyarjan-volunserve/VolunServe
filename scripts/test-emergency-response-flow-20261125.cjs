@@ -82,6 +82,8 @@ test("Resident assistance confirmation and Admin resolution preserve independent
   assert.match(residentCases, /"assistanceConfirmations"/);
   assert.match(residentCases, /"verifiedContributions"/);
   assert.match(residentCases, /"responseDisputes"/);
+  assert.match(residentCases, /assignment\.contributionType !== "Task completion"/);
+  assert.match(residentCases, /This does not prove that assistance was delivered/);
   const start = admin.indexOf("const confirmVolunteerCompletion");
   const end = admin.indexOf("const reviewVolunteerFieldReport", start);
   const confirm = admin.slice(start, end);
