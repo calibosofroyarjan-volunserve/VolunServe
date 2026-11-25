@@ -6,6 +6,7 @@ on:
       - backend/server.js
       - backend/identityFaceOnlyReviewEvidence.js
       - backend/tests/identityFaceOnlyReviewEvidence.test.js
+      - backend/test-identity-three-attempt-review.js
       - .github/workflows/qa-face-only-private-evidence-approval-20261125.yml
   workflow_dispatch:
 permissions:
@@ -21,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify baseline is deployed Node and strict four-file scope
+      - name: Verify baseline is deployed Node and strict five-file scope
         run: |
           node <<'JS'
           const assert=require('node:assert/strict');
@@ -34,9 +35,10 @@ jobs:
             '.github/workflows/qa-face-only-private-evidence-approval-20261125.yml',
             'backend/identityFaceOnlyReviewEvidence.js',
             'backend/server.js',
+            'backend/test-identity-three-attempt-review.js',
             'backend/tests/identityFaceOnlyReviewEvidence.test.js'
           ].sort(),'No unrelated backend, rules, Cloudinary, events, donations, emergency, or frontend changes');
-          console.log('PASS: exact deployed Node baseline and only three guarded backend test/source files');
+          console.log('PASS: exact deployed Node baseline and only guarded backend source and regression test files');
           JS
       - name: Syntax-check server, private evidence guard and isolated tests
         run: |
