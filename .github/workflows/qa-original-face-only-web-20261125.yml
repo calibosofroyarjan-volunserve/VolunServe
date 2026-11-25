@@ -45,7 +45,7 @@ jobs:
           assert.ok(ui.includes('precheckIdentityDocument('));
           assert.ok(api.includes('/api/identity/verify-face-only'));
           assert.ok(api.includes('/api/identity/verify-with-evidence'));
-          assert.ok(api.includes('faceOnly:'));
+          assert.ok(api.includes('options.faceOnly === true'));
           console.log('PASS: only opted-in original flow skips OCR and back scan; old flow preserved');
           JS
       - name: Compile TypeScript without deploying or using credentials
