@@ -7,6 +7,7 @@ on:
       - backend/identityTrustedAutomaticCompletion.js
       - backend/test-identityTrustedAutomaticCompletion.js
       - backend/identityTrustedSignedProof.js
+      - backend/TRUSTED-AUTO-VERIFICATION-INTEGRATION.md
       - backend/test-identityTrustedSignedProof.js
       - backend/test-identityAutoApprovalGateway.js
       - backend/test-identity-final-admin-only.js
@@ -43,6 +44,7 @@ jobs:
             'backend/server.js',
             'backend/test-identityTrustedAutomaticCompletion.js',
             'backend/identityTrustedSignedProof.js',
+            'backend/TRUSTED-AUTO-VERIFICATION-INTEGRATION.md',
             'backend/test-identityTrustedSignedProof.js',
             'backend/test-identityAutoApprovalGateway.js',
             'backend/test-identity-final-admin-only.js',
