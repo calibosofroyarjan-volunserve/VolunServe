@@ -144,6 +144,14 @@ export default function IdentityReviewsAdmin() {
   const [issuerReviewAttested,setIssuerReviewAttested] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState<"" | "verify" | "require_retry" | "reject">("");
+  // React Native Alert.alert may not display in web builds. Always show
+  // actionable feedback in the actual browser review page as well.
+  const [decisionFeedback, setDecisionFeedback] = useState("");
+  const [decisionFeedbackKind, setDecisionFeedbackKind] = useState<"error" | "success" | "info">("info");
+  const showDecisionFeedback = (message: string, kind: "error" | "success" | "info" = "error") => {
+    setDecisionFeedback(message);
+    setDecisionFeedbackKind(kind);
+  };
 
   const role =
     typeof profile?.role === "string"
@@ -278,6 +286,7 @@ export default function IdentityReviewsAdmin() {
   }, [wide, queueMode, loading, selected, page, filter, items, search]);
 
   const openReview = (item: IdentityReview) => {
+    setDecisionFeedback("");
     scrollRef.current?.scrollTo({y:0,animated:false});
     setQueueMode(false);
     setSelected(item);
@@ -292,6 +301,7 @@ export default function IdentityReviewsAdmin() {
     if (!selected || !user || saving) return;
 
     if (action === "verify" && selected.reviewTrack === "blurry_id_review") {
+      showDecisionFeedback("The National ID is too blurry for approval. Request a clearer scan.");
       Alert.alert(
         "Clear ID Evidence Required",
         "This claimed National ID is too blurry to identify. You may request a new scan, but it cannot be approved from the unreadable OCR result.",
@@ -299,6 +309,7 @@ export default function IdentityReviewsAdmin() {
       return;
     }
     if (action === "verify" && !validationMethod) {
+      showDecisionFeedback("Select the independent government ID validation method before verifying.");
       Alert.alert(
         "Validation Method Required",
         "Select how the Resident was independently validated by LGU/Admin.",
@@ -307,16 +318,19 @@ export default function IdentityReviewsAdmin() {
     }
 
     if (action === "verify" && (!issuerReviewAttested || notes.trim().length < 10)) {
+      showDecisionFeedback("Confirm the independent ID check and enter at least 10 characters of review notes.");
       Alert.alert("Independent Review Required","Complete the official or in-person government ID check, confirm it, and add brief privacy-safe review notes.");
       return;
     }
 
     if (action === "reject" && notes.trim().length < 10) {
+      showDecisionFeedback("A rejection requires at least 10 characters explaining the evidence problem.");
       Alert.alert("Rejection Reason Required",
         "Explain why the submitted identity evidence is rejected (at least 10 characters).");
       return;
     }
     if (action === "require_retry" && notes.trim().length < 5) {
+      showDecisionFeedback("Enter at least 5 characters explaining what the Resident must rescan.");
       Alert.alert(
         "Retry Reason Required",
         "Enter a clear reason so the Resident knows what must be corrected.",
@@ -338,6 +352,7 @@ export default function IdentityReviewsAdmin() {
 
     try {
       setSaving(action);
+      showDecisionFeedback("Submitting the independent Admin decision...", "info");
 
       const token = await user.getIdToken(true);
       const response = await fetch(
@@ -370,6 +385,15 @@ export default function IdentityReviewsAdmin() {
         );
       }
 
+      showDecisionFeedback(
+        body?.message ||
+          (action === "verify"
+            ? "Resident identity was manually verified after independent Admin validation."
+            : action === "reject"
+              ? "The identity submission was rejected."
+              : "A new Resident scan was requested."),
+        "success",
+      );
       Alert.alert(
         action === "verify"
           ? "Identity Verified"
@@ -388,6 +412,9 @@ export default function IdentityReviewsAdmin() {
       setNotes("");
       await loadReviews();
     } catch (saveError: any) {
+      showDecisionFeedback(
+        saveError?.message || "Unable to save the decision. Check access and try again.",
+      );
       Alert.alert(
         "Unable to Save Decision",
         saveError?.message ||
@@ -454,6 +481,25 @@ export default function IdentityReviewsAdmin() {
           <View style={styles.errorCard}>
             <Ionicons name="alert-circle-outline" size={18} color="#B91C1C" />
             <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+        {decisionFeedback ? (
+          <View
+            accessibilityRole="alert"
+            style={[
+              styles.errorCard,
+              decisionFeedbackKind === "success" && styles.decisionFeedbackSuccess,
+              decisionFeedbackKind === "info" && styles.decisionFeedbackInfo,
+            ]}
+          >
+            <Ionicons
+              name={decisionFeedbackKind === "success" ? "checkmark-circle-outline" : "information-circle-outline"}
+              size={18}
+              color={decisionFeedbackKind === "error" ? "#B91C1C" : "#08765A"}
+            />
+            <Text style={[styles.errorText, decisionFeedbackKind !== "error" && styles.decisionFeedbackText]}>
+              {decisionFeedback}
+            </Text>
           </View>
         ) : null}
 
@@ -726,8 +772,14 @@ function ReviewDetail({
     item.aiDecision === "manual_review" &&
     item.faceComparisonPassed === true &&
     item.evidenceAvailable === true;
+  // Metadata alone does not prove the Admin can inspect the private images.
+  // Fail closed if signed front ID/selfie views are missing, expired or failed
+  // to load; the existing refresh control obtains new 3-minute URLs.
+  const faceOnlyEvidenceReady = Boolean(
+    evidenceUris?.front && evidenceUris?.selfie && !evidenceLoading && !evidenceError
+  );
   const cannotApprove = blurry ||
-    (faceOnlyReview ? !eligibleFaceOnly : !recognized) ||
+    (faceOnlyReview ? (!eligibleFaceOnly || !faceOnlyEvidenceReady) : !recognized) ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
   const faceScore = typeof item.matchScore === "number" &&
     Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
@@ -1020,7 +1072,11 @@ function ReviewDetail({
               </View>
               {cannotApprove ? (
                 <Text style={styles.premiumDecisionHint}>
-                  {faceOnlyReview ? "Face-only submission requires an explicit comparison pass, retained private ID/selfie evidence and independent government ID review before approval. An uncertain result is NOT a successful match." : "This ID has not passed the required document screening. Request a corrected scan before approval."}
+                  {faceOnlyReview
+                    ? !faceOnlyEvidenceReady
+                      ? "Load the protected National ID portrait and selfie first. Use Refresh secure identity images if the links expired. Approval remains blocked until both are available and independently reviewed."
+                      : "Face-only submission requires an explicit comparison pass and independent National ID review. Uncertain face comparison cannot be approved."
+                    : "This ID has not passed the required document screening. Request a corrected scan before approval."}
                 </Text>
               ) : null}
             </>
@@ -1437,6 +1493,17 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     outlineStyle: "none",
   } as any,
+  decisionFeedbackSuccess: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+  },
+  decisionFeedbackInfo: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+  },
+  decisionFeedbackText: {
+    color: "#065F46",
+  },
   errorCard: {
     flexDirection: "row",
     alignItems: "flex-start",
