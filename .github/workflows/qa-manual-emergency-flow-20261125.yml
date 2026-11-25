@@ -12,6 +12,7 @@ on:
       - "components/tabs/MapTracking.native.tsx"
       - "lib/emergencyArrival.ts"
       - "scripts/test-emergency-response-flow-20261125.cjs"
+      - "scripts/test-emergency-manual-flow-emulator-20261125.cjs"
       - ".github/workflows/qa-manual-emergency-flow-20261125.yml"
   workflow_dispatch:
 permissions:
@@ -33,5 +34,11 @@ jobs:
         run: node --test scripts/test-emergency-response-flow-20261125.cjs
       - name: Verify TypeScript
         run: npx tsc --noEmit --pretty false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Authenticated Firestore rules emulator - manual Emergency Response end to end
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve-emergency-flow-qa-20261125 "node scripts/test-emergency-manual-flow-emulator-20261125.cjs"
       - name: Export standalone web bundle without deploying
         run: npx expo export --platform web --output-dir dist
