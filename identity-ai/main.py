@@ -20,6 +20,12 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageOps
+from staging_original_ai_isolation import assert_original_ai_staging_isolated
+
+# Staging-only startup gate. The exact protected production Python startup
+# remains unchanged unless this process is explicitly identified as staging.
+assert_original_ai_staging_isolated()
+
 app = FastAPI(
     title="VolunServe Identity AI",
     version="2.1.0",
