@@ -45,7 +45,7 @@ async function assessAutomaticIdentityApproval({
   if (!sameAttempt) return pending("provider_evidence_attempt_mismatch");
 
   const {uid: _ignoredUid, ...trustedAttempt} = attempt;
-  return decideAutomaticIdentityApproval({
+  const decision = decideAutomaticIdentityApproval({
     screening, face, attempt:trustedAttempt,
     issuerAttestation:issuer,
     padAttestation:pad,
@@ -53,6 +53,19 @@ async function assessAutomaticIdentityApproval({
       issuer?.serverValidated === true &&
       pad?.serverValidated === true,
   });
+  if (!decision.eligible) return decision;
+  // Eligibility is never enough to grant Verified status without two
+  // independently signed, one-time-use proof identifiers. They are SHA-256
+  // digests of issuer-scoped JWT IDs (never raw proofs or identity numbers).
+  const a = issuer?.trustedProofReplayKey;
+  const b = pad?.trustedProofReplayKey;
+  if (typeof a !== "string" || typeof b !== "string" ||
+      !/^[a-f0-9]{64}$/.test(a) || !/^[a-f0-9]{64}$/.test(b) || a === b)
+    return pending("trusted_proof_replay_receipts_missing");
+  return {
+    ...decision,
+    trustedProofReplayKeys: Object.freeze({issuer:a,pad:b}),
+  };
 }
 
 module.exports = { assessAutomaticIdentityApproval };
