@@ -24,6 +24,7 @@ function resolveTrustedAutomaticCompletion({
   verificationId,
   screening,
   assets,
+  aiDecision,
 } = {}) {
   const blocked = reason => ({eligible:false, reason});
   if (enabled !== true) return blocked("trusted_automatic_verification_disabled");
@@ -32,6 +33,8 @@ function resolveTrustedAutomaticCompletion({
       assessment.decision !== "auto_verified" ||
       assessment.reason !== "all_independent_proofs_validated")
     return blocked("trusted_independent_provider_proofs_missing");
+  if (!["verified", "manual_review"].includes(aiDecision))
+    return blocked("ai_comparison_failed_or_unsupported");
   if (!selectedIdRecognized(screening))
     return blocked("selected_government_id_not_recognized");
 
