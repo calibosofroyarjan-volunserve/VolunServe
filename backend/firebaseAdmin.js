@@ -10,6 +10,7 @@ const {
 const {
   getAuth,
 } = require("firebase-admin/auth");
+const { assertOriginalAiStagingIsolation } = require("./stagingOriginalAiIsolationPolicy");
 
 const {
   getFirestore,
@@ -56,11 +57,22 @@ function getFirebaseApp() {
     getApps();
 
   if (existingApps.length > 0) {
+    // Preserve existing production behavior. On staging only, refuse
+    // an already-created Firebase app if isolation is unconfirmed.
+    const env = process.env;
+    if (/staging/i.test(String(env.RENDER_SERVICE_NAME || "")) ||
+        String(env.VOLUNSERVE_DEPLOYMENT_ENV || "").toLowerCase() === "staging" ||
+        String(env.VOLUNSERVE_STAGING_STRICT || "").toLowerCase() === "true") {
+      assertOriginalAiStagingIsolation(env, getServiceAccount());
+    }
     return existingApps[0];
   }
 
   const serviceAccount =
     getServiceAccount();
+  // Staging must fail before any Firebase network client is initialized.
+  // No changes to approved production role/account data or Firebase rules.
+  assertOriginalAiStagingIsolation(process.env, serviceAccount);
 
   if (serviceAccount) {
     return initializeApp({
