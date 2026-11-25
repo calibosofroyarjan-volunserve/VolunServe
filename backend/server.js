@@ -24,6 +24,7 @@ const {
   classifyIdentityReviewTrack,
 } = require("./selectedIdPolicy");
 const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
+const { validateFaceOnlyReviewEvidence } = require("./identityFaceOnlyReviewEvidence");
 const { classifyHybridDocumentPrecheck } = require("./identityHybridPrecheckDecision");
 const { assessAutomaticIdentityApproval } = require("./identityAutoApprovalGateway");
 const {
@@ -6024,11 +6025,15 @@ app.post(
       const verificationRef = db
         .collection("identityVerifications")
         .doc(targetUid);
+      const evidenceRef = db.collection("identityPrivateEvidence").doc(targetUid);
       const activityRef = db.collection("adminActivityLogs").doc();
       const result = await db.runTransaction(async (transaction) => {
-        const [userSnapshot, verificationSnapshot] = await Promise.all([
+        // Fetch all three records before any write. The consented evidence must
+        // still be current at the same commit that grants Verified Resident.
+        const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
           transaction.get(userRef),
           transaction.get(verificationRef),
+          transaction.get(evidenceRef),
         ]);
         if (!userSnapshot.exists) {
           throw makeHttpError(
@@ -6090,6 +6095,20 @@ app.post(
           )) {
             throw makeHttpError(409, "face_only_independent_review_required",
               "Original face-only approval requires a confirmed 1-to-1 comparison pass, retained consented ID/selfie and independent Admin ID validation.");
+          }
+          if (faceOnlyReview) {
+            // The Admin UI may have loaded a signed photo earlier, but that
+            // does not prove private evidence still exists or is unexpired.
+            // Backend must validate this atomically in the approval transaction.
+            const currentEvidence = validateFaceOnlyReviewEvidence({
+              uid: targetUid,
+              verification,
+              evidence: evidenceSnapshot.exists ? evidenceSnapshot.data() : null,
+            });
+            if (!currentEvidence.ok) {
+              throw makeHttpError(409, "face_only_evidence_unavailable",
+                "The protected National ID portrait or selfie is missing, expired, or no longer linked to this submission. Require a new scan before approval.");
+            }
           }
           if (!faceOnlyReview && !selectedIdRecognized(selectedIdCheck)) {
             throw makeHttpError(
