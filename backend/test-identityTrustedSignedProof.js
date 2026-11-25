@@ -64,7 +64,26 @@ function validators(overrides={}){
 }
 test("independent signed issuer and PAD proofs pass with authentic signatures and matching request",async()=>{
   const out=await assessAutomaticIdentityApproval({screening,face,attempt,...validators()});
-  assert.deepEqual(out,{eligible:true,decision:"auto_verified",reason:"all_independent_proofs_validated"});
+  assert.equal(out.eligible,true);
+  assert.equal(out.decision,"auto_verified");
+  assert.equal(out.reason,"all_independent_proofs_validated");
+  assert.match(out.trustedProofReplayKeys.issuer,/^[a-f0-9]{64}$/);
+  assert.match(out.trustedProofReplayKeys.pad,/^[a-f0-9]{64}$/);
+  assert.notEqual(out.trustedProofReplayKeys.issuer,out.trustedProofReplayKeys.pad);
+});
+test("reissued proof with same issuer JWT ID has same one-time receipt across different requests",()=>{
+  const original=verifyTrustedSignedProof(params("issuer",proof("issuer")));
+  const otherRequest="differentRequest123";
+  const revised=verifyTrustedSignedProof(params(
+    "issuer",proof("issuer",{requestId:otherRequest}),
+    {requestId:otherRequest}
+  ));
+  assert.equal(original.trustedProofReplayKey,revised.trustedProofReplayKey);
+});
+test("issuer and PAD proof hashes differ even if provider JWT IDs are identical",()=>{
+  const issuerReceipt=verifyTrustedSignedProof(params("issuer",proof("issuer")));
+  const padReceipt=verifyTrustedSignedProof(params("pad",proof("pad")));
+  assert.notEqual(issuerReceipt.trustedProofReplayKey,padReceipt.trustedProofReplayKey);
 });
 test("missing provider proof causes pending, not auto verified",async()=>{
   const v=validators({issuerToken:undefined});
