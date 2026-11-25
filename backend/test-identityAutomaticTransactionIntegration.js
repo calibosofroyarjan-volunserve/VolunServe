@@ -140,7 +140,6 @@ async function runScenario({
   const fakeFace=face();
   if(badFace)fakeFace.calibrationValidated=false;
   const adapters=issuerPad();
-  if(withoutIssuer)delete adapters.issuerValidator; // frozen adapters: assignment cannot override
   const trustedAdapters=withoutIssuer?{padValidator:adapters.padValidator}
     :badPad?{issuerValidator:adapters.issuerValidator,
         padValidator:async()=>{throw new Error("PAD provider offline");}}
