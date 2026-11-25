@@ -6036,16 +6036,26 @@ app.post(
             throw makeHttpError(409, "ocr_only_review_requires_rescan",
               "This ID-only case has no face scan or retained ID evidence. Require Retry to complete full verification.");
           }
+          const faceOnlyReview = verification.verificationMethod === "volunserve_ai_face_only";
           const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
-          if (!selectedIdRecognized(selectedIdCheck)) {
+          if (faceOnlyReview && (
+            verification.aiDecision !== "verified" || !verification.privateEvidenceRequestId ||
+            selectedIdCheck.declaredIdType !== "national_id"
+          )) {
+            throw makeHttpError(409, "face_only_independent_review_required",
+              "Original face-only verification needs a positive face comparison and retained consented ID/selfie for independent Admin review.");
+          }
+          if (!faceOnlyReview && !selectedIdRecognized(selectedIdCheck)) {
             throw makeHttpError(
               409,
               "selected_government_id_not_recognized",
               "The selected supported government ID was not recognized. Require a new scan before approval.",
             );
           }
+          // Face-only never claims government ID OCR recognition. An LGU Admin
+          // must independently inspect the real National ID and retained face.
           const evidence = reviewIssuerEvidence({
-            declaredType: selectedIdCheck.declaredIdType,
+            declaredType: faceOnlyReview ? "national_id" : selectedIdCheck.declaredIdType,
             validationMethod,
             confirmed: issuerReviewAttested,
             notes,
