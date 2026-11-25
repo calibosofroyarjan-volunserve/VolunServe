@@ -92,7 +92,7 @@ jobs:
             }
             const guardSource=fs.readFileSync('.qa-safe/backend/firebaseAdmin.js','utf8');
             assert.match(guardSource,/assertOriginalAiStagingIsolation\(process\.env,\s*serviceAccount\)/);
-            assert.match(guardSource,/existing Firebase app project cannot be independently verified/);
+            assert.match(guardSource,/previously initialized Firebase app refused because credential origin cannot be independently verified/);
             const nodeSource=fs.readFileSync('.qa-safe/backend/server.js','utf8');
             assert.match(nodeSource,/identityVerified:\s*accountApproved/);
             assert.match(nodeSource,/profile\s*\?\.identityVerified\s*===\s*true\s*&&/);
