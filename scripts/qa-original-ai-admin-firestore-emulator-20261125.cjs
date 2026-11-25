@@ -44,9 +44,12 @@ const {reviewIssuerEvidence} = require("./backend/identityIssuerReviewPolicy");
 const {
   parseConsentedIdentityEvidence,uploadIdentityEvidence,
   signedIdentityEvidence,identityEvidenceRetentionDate,
+  destroyIdentityEvidence,purgeExpiredIdentityEvidence,
 } = require("./backend/identityPrivateEvidence");
 const evidenceStorage=new Map();
 const evidenceSignings=[];
+const evidenceDeletes=[];
+const destroyFailures=new Set();
 const cloudinary={
   uploader:{
     upload_stream(options,callback){
@@ -68,6 +71,15 @@ const cloudinary={
         }
       });
     },
+    async destroy(publicId,opts){
+      assert.equal(opts.type,"authenticated");
+      assert.equal(opts.invalidate,true);
+      assert.equal(opts.resource_type,"image");
+      evidenceDeletes.push(publicId);
+      if(destroyFailures.has(publicId))throw Error("synthetic-local-cleanup-failure");
+      evidenceStorage.delete(publicId);
+      return {result:"ok"};
+    }
   },
   utils:{
     private_download_url(publicId,format,opts){
@@ -470,6 +482,153 @@ async function run() {
     assert.equal(finalViewLogs.size,accessCountBefore+2);
     assert.equal((await profileRef(idOnlyUid).get()).data().identityVerified,false);
     pass("Each successful private Admin evidence view audited exactly once; unauthorized views not audited");
+
+
+    // Actual private-evidence retention and orphan cleanup routines,
+    // isolated from production Firebase or Cloudinary.
+    const retentionStart=Date.UTC(2026,10,25,0,0,0);
+    assert.equal(
+      identityEvidenceRetentionDate(retentionStart).getTime()-retentionStart,
+      30*24*60*60*1000
+    );
+    pass("Private evidence retention duration is precisely 30 days");
+
+    // Start with an expired ID/selfie record created by the existing upload
+    // helper. The cleanup must destroy all 3 authenticated fake assets,
+    // remove private Firestore metadata, and clear ONLY the matching pointer.
+    await db.collection("identityPrivateEvidence").doc(evidenceUid).update({
+      retentionUntil:new Date(Date.now()-60*1000)
+    });
+    const assetCountBeforeCleanup=evidenceStorage.size;
+    const deletedBeforeCleanup=evidenceDeletes.length;
+    let purged=await purgeExpiredIdentityEvidence({
+      db,FieldValue,cloudinary,configureCloudinary
+    });
+    assert.equal(purged,1);
+    assert.equal(evidenceDeletes.length-deletedBeforeCleanup,3);
+    for(const asset of Object.values(uploaded)) {
+      assert.equal(evidenceStorage.has(asset.publicId),false);
+    }
+    assert.equal(evidenceStorage.size,assetCountBeforeCleanup-3);
+    assert.equal((await db.collection("identityPrivateEvidence").doc(evidenceUid).get()).exists,false);
+    const cleared=(await verificationRef(evidenceUid).get()).data();
+    assert.ok(!Object.prototype.hasOwnProperty.call(cleared,"privateEvidenceRequestId"));
+    seen=await call("GET",evidenceRoute,adminToken);
+    assert.equal(seen.status,404);
+    assert.equal(seen.body.error,"identity_evidence_not_retained");
+    pass("Actual purge removes expired 3 private assets, Firestore metadata, and matching verification pointer");
+
+    // The nonexpired OCR-only document remains available: cleanup should
+    // not touch two-sided ID metadata, storage or verification pointer.
+    purged=await purgeExpiredIdentityEvidence({
+      db,FieldValue,cloudinary,configureCloudinary
+    });
+    assert.equal(purged,0);
+    for(const asset of Object.values(idOnlyAssets))
+      assert.ok(evidenceStorage.has(asset.publicId));
+    assert.equal((await db.collection("identityPrivateEvidence").doc(idOnlyUid).get()).exists,true);
+    assert.equal((await verificationRef(idOnlyUid).get()).data().privateEvidenceRequestId,idOnlyReq);
+    pass("Active OCR-only ID evidence is retained; repeated cleanup is idempotent");
+
+    // A provider deletion failure must NOT clear the Firestore metadata and
+    // must NOT permit Admin viewing an already expired record.
+    const failUid="synthetic_cleanup_failure_20261125";
+    const failReq="synthetic_cleanup_failure_attempt_20261125";
+    await record(failUid);
+    const failAssets=await uploadSynthetic(failUid,failReq);
+    await verificationRef(failUid).update({privateEvidenceRequestId:failReq});
+    await db.collection("identityPrivateEvidence").doc(failUid).set({
+      requestId:failReq,verificationId:"demo-verification-"+failUid,
+      retentionUntil:new Date(Date.now()-60000),
+      assets:failAssets
+    });
+    destroyFailures.add(failAssets.front.publicId);
+    purged=await purgeExpiredIdentityEvidence({
+      db,FieldValue,cloudinary,configureCloudinary
+    });
+    assert.equal(purged,0);
+    assert.equal((await db.collection("identityPrivateEvidence").doc(failUid).get()).exists,true);
+    assert.equal((await verificationRef(failUid).get()).data().privateEvidenceRequestId,failReq);
+    seen=await call("GET","/api/admin/identity/reviews/"+failUid+"/evidence",adminToken);
+    assert.equal(seen.status,410);
+    assert.equal(seen.body.error,"identity_evidence_expired");
+    destroyFailures.delete(failAssets.front.publicId);
+    purged=await purgeExpiredIdentityEvidence({
+      db,FieldValue,cloudinary,configureCloudinary
+    });
+    assert.equal(purged,1);
+    assert.equal((await db.collection("identityPrivateEvidence").doc(failUid).get()).exists,false);
+    assert.equal((await verificationRef(failUid).get()).data().privateEvidenceRequestId,undefined);
+    for(const asset of Object.values(failAssets))
+      assert.equal(evidenceStorage.has(asset.publicId),false);
+    pass("Cloudinary mock deletion failure preserves expired metadata for retry; subsequent cleanup succeeds");
+
+    // If a Resident submitted a newer application, purging the older stored
+    // images must not remove the NEW current verification pointer.
+    const replacedUid="synthetic_superseded_20261125";
+    const oldReq="synthetic_old_request_20261125";
+    const newerReq="synthetic_newer_request_20261125";
+    await record(replacedUid);
+    const obsolete=await uploadSynthetic(replacedUid,oldReq);
+    await db.collection("identityPrivateEvidence").doc(replacedUid).set({
+      requestId:oldReq,verificationId:"demo-verification-"+replacedUid,
+      retentionUntil:new Date(Date.now()-10000),
+      assets:obsolete
+    });
+    await verificationRef(replacedUid).update({privateEvidenceRequestId:newerReq});
+    purged=await purgeExpiredIdentityEvidence({
+      db,FieldValue,cloudinary,configureCloudinary
+    });
+    assert.equal(purged,1);
+    assert.equal((await db.collection("identityPrivateEvidence").doc(replacedUid).get()).exists,false);
+    assert.equal((await verificationRef(replacedUid).get()).data().privateEvidenceRequestId,newerReq);
+    for(const asset of Object.values(obsolete))
+      assert.equal(evidenceStorage.has(asset.publicId),false);
+    pass("Purging superseded request preserves the new verification attempt pointer");
+
+    // Directly exercise the real upload helper's partial-write rollback.
+    // The mock fails the SECOND upload, so the FRONT must be destroyed.
+    const brokenUid="synthetic_upload_rollback_20261125";
+    const brokenReq="synthetic_upload_rollback_attempt_20261125";
+    const rollbackCloudinary={
+      ...cloudinary,
+      uploader:{
+        ...cloudinary.uploader,
+        upload_stream(options,callback){
+          if(options.public_id.endsWith("/back")){
+            return new Writable({
+              write(_chunk,_encoding,next){next();},
+              final(next){callback(new Error("synthetic-back-upload-failure"));next();}
+            });
+          }
+          return cloudinary.uploader.upload_stream(options,callback);
+        }
+      }
+    };
+    const rollbackFrontId="volunserve/identity-private/"+brokenUid+"/"+brokenReq+"/front";
+    await assert.rejects(
+      uploadIdentityEvidence({
+        images:{
+          front:{data:blankPng,mime:"image/png"},
+          back:{data:blankPng,mime:"image/png"},
+          selfie:{data:blankPng,mime:"image/png"}
+        },uid:brokenUid,requestId:brokenReq,
+        cloudinary:rollbackCloudinary,configureCloudinary
+      }),
+      error=>error.code==="identity_evidence_upload_failed"
+    );
+    assert.equal(evidenceStorage.has(rollbackFrontId),false);
+    assert.ok(evidenceDeletes.includes(rollbackFrontId));
+    assert.equal((await db.collection("identityPrivateEvidence").doc(brokenUid).get()).exists,false);
+    pass("Partial private image upload failure rolls back previously uploaded fake asset");
+
+    // The actual cleanup routine remains safe if there is nothing expired.
+    purged=await purgeExpiredIdentityEvidence({
+      db,FieldValue,cloudinary,configureCloudinary
+    });
+    assert.equal(purged,0);
+    assert.equal(evidenceStorage.size,2); // nonexpired OCR-only front and back
+    pass("No expired evidence remains, and only active two-sided ID assets survive");
 
     console.log("PASS: "+labels.length+" real emulator HTTP+Firestore Admin scenarios; DEMO project only");
   } finally {
