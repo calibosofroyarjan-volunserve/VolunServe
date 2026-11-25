@@ -166,6 +166,100 @@ async function main() {
     }));
     assert.equal((await assertSucceeds(getDoc(incidentRef))).data().status,"resolved");
     console.log("PASS: synthetic Resident report → Admin review/offer → Volunteer accept → GPS share/stop → On Site → one-tap completion → Resident fully helped → Admin resolved");
+
+    // Disputed assistance: Resident says NOT HELPED. It must create a dispute,
+    // never an automatic verified contribution or resolved case.
+    const DISPUTE_CASE = "qa-disputed-case";
+    const DISPUTE = "qa-disputed-case_qa-volunteer";
+    await env.withSecurityRulesDisabled(async context => {
+      const root = context.firestore();
+      await setDoc(doc(root, "disasterCases", DISPUTE_CASE), {
+        reporterUid:RESIDENT,status:"assigned",verificationStatus:"validated",
+      });
+      await setDoc(doc(root,"responseAssignments",DISPUTE), {
+        caseId:DISPUTE_CASE,volunteerId:VOLUNTEER,
+        volunteerName:"Synthetic Volunteer",caseTitle:"Synthetic disputed case",
+        status:"completed",contributionType:"Task completion",
+        contributionSummary:"Volunteer marked task complete; no field report was submitted.",
+        peopleHelped:0,completionNotes:"",residentConfirmationStatus:"pending",
+        responseStartedAt:stamp(),arrivedAt:stamp(),completedAt:stamp(),
+        createdAt:stamp(),updatedAt:stamp(),
+      });
+    });
+    const disputeNote = "The Resident reports no assistance was received.";
+    const disputed = writeBatch(resident);
+    disputed.set(doc(resident,"assistanceConfirmations",DISPUTE), {
+      assignmentId:DISPUTE,caseId:DISPUTE_CASE,residentId:RESIDENT,
+      volunteerId:VOLUNTEER,outcome:"not_helped",reviewState:"disputed",
+      residentNote:disputeNote,creditStatus:"disputed",
+      createdAt:stamp(),updatedAt:stamp(),
+    });
+    disputed.set(doc(resident,"responseDisputes",DISPUTE), {
+      assignmentId:DISPUTE,caseId:DISPUTE_CASE,
+      volunteerId:VOLUNTEER,residentId:RESIDENT,
+      residentNote:disputeNote,contributionType:"Task completion",
+      contributionSummary:"Volunteer marked task complete; no field report was submitted.",
+      status:"open",createdAt:stamp(),updatedAt:stamp(),
+    });
+    disputed.update(doc(resident,"responseAssignments",DISPUTE), {
+      residentConfirmationStatus:"disputed",residentConfirmationOutcome:"not_helped",
+      residentConfirmedAt:stamp(),updatedAt:stamp(),
+    });
+    await assertSucceeds(disputed.commit());
+    assert.equal((await assertSucceeds(getDoc(doc(admin,"responseDisputes",DISPUTE)))).data().status,"open");
+    assert.equal((await assertSucceeds(getDoc(doc(admin,"disasterCases",DISPUTE_CASE)))).data().status,"assigned");
+    assert.equal((await assertSucceeds(getDoc(doc(admin,"verifiedContributions",DISPUTE)))).exists(),false);
+    console.log("PASS: Not Helped creates Admin dispute; case stays open; no contribution credit");
+
+    // Partial assistance uses the exact Resident confirmation rules but may
+    // NOT be treated as fully helped for Admin case resolution.
+    const PARTIAL_CASE = "qa-partial-case";
+    const PARTIAL = "qa-partial-case_qa-volunteer";
+    await env.withSecurityRulesDisabled(async context => {
+      const root = context.firestore();
+      await setDoc(doc(root,"disasterCases",PARTIAL_CASE),{
+        reporterUid:RESIDENT,status:"assigned",verificationStatus:"validated",
+      });
+      await setDoc(doc(root,"responseAssignments",PARTIAL),{
+        caseId:PARTIAL_CASE,volunteerId:VOLUNTEER,
+        volunteerName:"Synthetic Volunteer",caseTitle:"Synthetic partial case",
+        status:"completed",contributionType:"Task completion",
+        contributionSummary:"Volunteer marked task complete; no field report was submitted.",
+        peopleHelped:0,completionNotes:"",residentConfirmationStatus:"pending",
+        responseStartedAt:stamp(),arrivedAt:stamp(),completedAt:stamp(),
+        createdAt:stamp(),updatedAt:stamp(),
+      });
+    });
+    const partialAssignment = (await assertSucceeds(getDoc(doc(resident,"responseAssignments",PARTIAL)))).data();
+    const partial = writeBatch(resident);
+    partial.set(doc(resident,"assistanceConfirmations",PARTIAL), {
+      assignmentId:PARTIAL,caseId:PARTIAL_CASE,residentId:RESIDENT,
+      volunteerId:VOLUNTEER,outcome:"partially_helped",
+      reviewState:"resident_confirmed",residentNote:"Help was partial.",
+      creditStatus:"credited",createdAt:stamp(),updatedAt:stamp(),
+    });
+    partial.set(doc(resident,"verifiedContributions",PARTIAL),{
+      assignmentId:PARTIAL,caseId:PARTIAL_CASE,volunteerId:VOLUNTEER,
+      volunteerName:"Synthetic Volunteer",residentId:RESIDENT,
+      outcome:"partially_helped",contributionType:partialAssignment.contributionType,
+      contributionSummary:partialAssignment.contributionSummary,
+      peopleHelped:partialAssignment.peopleHelped,
+      completionNotes:partialAssignment.completionNotes,
+      responseStartedAt:partialAssignment.responseStartedAt,
+      arrivedAt:partialAssignment.arrivedAt,completedAt:partialAssignment.completedAt,
+      residentConfirmedAt:stamp(),verificationSource:"resident_confirmation",
+      status:"verified",createdAt:stamp(),verifiedAt:stamp(),
+    });
+    partial.update(doc(resident,"responseAssignments",PARTIAL),{
+      residentConfirmationStatus:"resident_confirmed",
+      residentConfirmationOutcome:"partially_helped",verifiedContributionId:PARTIAL,
+      residentConfirmedAt:stamp(),updatedAt:stamp(),
+    });
+    await assertSucceeds(partial.commit());
+    assert.equal((await assertSucceeds(getDoc(doc(admin,"verifiedContributions",PARTIAL)))).data().outcome,"partially_helped");
+    assert.equal((await assertSucceeds(getDoc(doc(admin,"disasterCases",PARTIAL_CASE)))).data().status,"assigned");
+    console.log("PASS: Partially Helped recorded; case not automatically resolved");
+
   } finally {
     await env.cleanup();
   }
