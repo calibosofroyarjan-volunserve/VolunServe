@@ -1,0 +1,225 @@
+name: Original AI Node+Python Staging Bridge QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-isolated-staging-candidate-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge:
+    name: Pinned original AI cross-service contracts and synthetic key isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read pinned source and verify original-AI HTTP and ID contracts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('node:fs');
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const versions={
+              nodeBase:'d06aeb1e0a572bf8581a99d7064da0a8d2430ed4',
+              pythonBase:'319152e6a1cad5e54653c20e87bd1551a82b219e',
+              pythonCandidate:'b6e093065fbd207756ba5427a127a74b2bb02ba8',
+              webRollback:'5af28d279618dacd5eab518e5e0d52259eae8844'
+            };
+            const read=async(path,ref)=>{
+              const {data}=await github.rest.repos.getContent({owner,repo,path,ref});
+              assert.equal(data.encoding,'base64','Missing immutable source '+path);
+              return Buffer.from(data.content,'base64').toString('utf8');
+            };
+            const [nodeCompare,pythonCompare]=await Promise.all([
+              github.rest.repos.compareCommits({owner,repo,base:versions.nodeBase,head:context.sha}),
+              github.rest.repos.compareCommits({owner,repo,base:versions.pythonBase,head:versions.pythonCandidate})
+            ]);
+            assert.equal(nodeCompare.data.behind_by,0,'Node candidate lost deployed Node functionality');
+            assert.equal(pythonCompare.data.behind_by,0,'Python candidate lost deployed Python functionality');
+            const nodeDiff=(nodeCompare.data.files||[]).map(f=>f.filename).sort();
+            const pythonDiff=(pythonCompare.data.files||[]).map(f=>f.filename).sort();
+            assert.deepEqual(nodeDiff,[
+              '.github/workflows/qa-original-ai-cross-service-20261125.yml',
+              '.github/workflows/qa-original-ai-staging-candidate-20261125.yml',
+              'backend/firebaseAdmin.js',
+              'backend/stagingOriginalAiIsolationPolicy.js'
+            ]);
+            assert.deepEqual(pythonDiff,[
+              '.github/workflows/qa-original-ai-isolated-python-candidate-20261125.yml',
+              'identity-ai/main.py',
+              'identity-ai/staging_original_ai_isolation.py'
+            ]);
+            const [nodeGuard,pythonGuard,nodeMain,nodeReadiness,pythonMain,screening,
+              selectedIds,webClient,nodeAdmin,pythonCandidateMain]=await Promise.all([
+              read('backend/stagingOriginalAiIsolationPolicy.js',context.sha),
+              read('identity-ai/staging_original_ai_isolation.py',versions.pythonCandidate),
+              read('backend/server.js',versions.nodeBase),
+              read('backend/identityAiReadiness.js',versions.nodeBase),
+              read('identity-ai/main.py',versions.pythonBase),
+              read('identity-ai/document_screening.py',versions.pythonBase),
+              read('backend/selectedIdPolicy.js',versions.nodeBase),
+              read('lib/identityVerification.ts',versions.webRollback),
+              read('backend/firebaseAdmin.js',context.sha),
+              read('identity-ai/main.py',versions.pythonCandidate)
+            ]);
+            const all=['national_id','drivers_license','passport','umid','prc_id'].sort();
+            const nodeAllow=selectedIds.match(/const ALLOWED = new Set\((\[[^\]]+\])\)/);
+            const pythonAllow=pythonMain.match(/ACCEPTED_ID_TYPES\s*=\s*\{([^}]+)\}/);
+            const pythonScreening=screening.match(/SUPPORTED\s*=\s*frozenset\(\{([^}]+)\}\)/);
+            assert.ok(nodeAllow&&pythonAllow&&pythonScreening,'ID allowlist missing');
+            const quotes=s=>[...s.matchAll(/"([^"]+)"/g)].map(m=>m[1]).sort();
+            assert.deepEqual(JSON.parse(nodeAllow[1]).sort(),all);
+            assert.deepEqual(quotes(pythonAllow[1]),all);
+            assert.deepEqual(quotes(pythonScreening[1]),all);
+            assert.ok(!pythonMain.includes('"other_government_id"'));
+            core.info('PASS: exact five government IDs match Node and Python OCR; broad ID class absent');
+            for(const route of [
+              '/api/identity/document/precheck-with-evidence',
+              '/api/identity/verify-with-evidence',
+              '/api/admin/identity/reviews/:uid/evidence',
+              '/api/admin/identity/reviews/:uid/decision'
+            ])assert.ok(nodeMain.includes(route),'Missing deployed Node route: '+route);
+            for(const route of ['/api/identity/document/precheck-with-evidence',
+              '/api/identity/verify-with-evidence'])
+              assert.ok(webClient.includes(route),'Frontend/backend route mismatch: '+route);
+            assert.match(pythonMain,/@app\.post\(\s*"\/document\/precheck"/);
+            assert.match(pythonMain,/@app\.post\(\s*"\/verify"/);
+            assert.ok(nodeMain.includes('X-VolunServe-Internal-Key'));
+            assert.ok(nodeReadiness.includes('/api/internal/auth-check'));
+            assert.ok(nodeReadiness.includes('identity_ai_auth_mismatch'));
+            assert.ok(pythonMain.includes('/api/internal/auth-check'));
+            assert.ok(pythonMain.includes('secrets.compare_digest'));
+            assert.match(nodeAdmin,/assertOriginalAiStagingIsolation\(process\.env,\s*serviceAccount\)/);
+            assert.match(pythonCandidateMain,/assert_original_ai_staging_isolated\(\)/);
+            core.info('PASS: restored web→Node→Python routes and private internal-key auth-check contract');
+            assert.match(nodeGuard,/VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256/);
+            assert.match(nodeGuard,/VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256/);
+            assert.match(pythonGuard,/VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256/);
+            assert.match(pythonGuard,/VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256/);
+            fs.mkdirSync('.qa-bridge',{recursive:true});
+            fs.writeFileSync('.qa-bridge/node-guard.js',nodeGuard);
+            fs.writeFileSync('.qa-bridge/python-guard.py',pythonGuard);
+            core.info('PASS: both candidate startup guards use same fingerprint contract');
+            core.summary.addHeading('VolunServe Original AI paired staging QA');
+            core.summary.addRaw('All source pins immutable: live Node + live Python + restored Hosting + two isolated startup candidates.\n\n',true);
+            core.summary.addRaw('Contract checks for 5 approved government IDs, consented private routes, original AI face endpoints, and backend↔AI private auth-check: PASS.\n\n',true);
+            await core.summary.write();
+      - name: Exercise both real candidate guards as a paired synthetic startup
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import importlib.util
+          import json
+          import subprocess
+          from pathlib import Path
+
+          modpath=Path('.qa-bridge/python-guard.py')
+          compile(modpath.read_text(),'python-guard.py','exec')
+          spec=importlib.util.spec_from_file_location('original_ai_qa_guard',modpath)
+          module=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          py_guard=module.assert_original_ai_staging_isolated
+
+          node_runner=r'''
+          "use strict";
+          const fs=require("node:fs");
+          const pair=JSON.parse(fs.readFileSync(0,"utf8"));
+          const nodeGuard=require("./.qa-bridge/node-guard.js").assertOriginalAiStagingIsolation;
+          try {
+            nodeGuard(pair.env,pair.serviceAccount);
+            process.stdout.write("PASS");
+          } catch (e) {
+            if(!String(e.message).includes("staging isolation blocked"))throw e;
+            process.stdout.write("BLOCKED");
+          }
+          '''
+          def sha(s):return hashlib.sha256(s.encode()).hexdigest()
+          fake_key="qa-only-not-a-real-internal-key-20261125-A-CrossService"
+          fake_prod="qa-only-not-a-real-internal-key-20261125-B-Production"
+          fake_other="qa-only-not-a-real-internal-key-20261125-C-Mismatch"
+          base_common={
+            "VOLUNSERVE_DEPLOYMENT_ENV":"staging",
+            "VOLUNSERVE_STAGING_STRICT":"true",
+            "VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID":"demo-independent-volunserve-qa-project",
+            "IDENTITY_AI_INTERNAL_KEY":fake_key,
+            "VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256":sha(fake_key),
+            "VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256":sha(fake_prod)
+          }
+          node={**base_common,
+            "RENDER_SERVICE_NAME":"volunserve-backend-staging",
+            "IDENTITY_AI_SERVICE_URL":"https://volunserve-identity-ai-staging.onrender.com",
+            "VOLUNSERVE_STAGING_CLOUDINARY_CLOUD_NAME":"demo-staging-isolated-cloud",
+            "CLOUDINARY_CLOUD_NAME":"demo-staging-isolated-cloud",
+            "CLOUDINARY_API_KEY":"DUMMY-NON-CREDENTIAL-API-KEY",
+            "CLOUDINARY_API_SECRET":"DUMMY-NON-CREDENTIAL-API-SECRET"
+          }
+          python={**base_common,
+            "RENDER_SERVICE_NAME":"volunserve-identity-ai-staging",
+            "VOLUNSERVE_STAGING_BACKEND_URL":"https://volunserve-backend-staging.onrender.com",
+            "GOOGLE_CLOUD_PROJECT":"demo-independent-volunserve-qa-project",
+            "ALLOWED_ORIGINS":"http://localhost:8081"
+          }
+          account={"project_id":"demo-independent-volunserve-qa-project"}
+          def node_status(env,acct=account):
+            response=subprocess.run(["node","-e",node_runner],input=json.dumps({
+              "env":env,"serviceAccount":acct
+            }),text=True,capture_output=True,check=True,timeout=12)
+            assert response.stdout in ("PASS","BLOCKED"),"Unexpected Node gate output"
+            return response.stdout
+          def py_status(env):
+            try:
+              py_guard(env)
+            except RuntimeError as error:
+              assert "staging isolation blocked" in str(error)
+              return "BLOCKED"
+            return "PASS"
+          def paired_status(n,p,acct=account):
+            n_status=node_status(n,acct)
+            p_status=py_status(p)
+            matching_project=(n.get("VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID")==
+                              p.get("VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID"))
+            matching_fingerprint=(n.get("VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256")==
+                                  p.get("VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256"))
+            return n_status,p_status,(n_status=="PASS" and p_status=="PASS"
+                                      and matching_project and matching_fingerprint)
+          assert paired_status(node,python)==("PASS","PASS",True)
+          print("PASS: both real Node/Python guards accept matched synthetic staging configuration")
+          checks=[
+            ("Node redirects to production AI",{**node,"IDENTITY_AI_SERVICE_URL":"https://volunserve-identity-ai.onrender.com"},python),
+            ("Python redirects to production backend",node,{**python,"VOLUNSERVE_STAGING_BACKEND_URL":"https://volunserve.onrender.com"}),
+            ("Node uses production Firebase project",{**node,"VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID":"volunserve-3aa5b"},python),
+            ("Python uses production Firebase project",node,{**python,"VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID":"volunserve-3aa5b"}),
+            ("Node Cloudinary uses production cloud",{**node,"CLOUDINARY_CLOUD_NAME":"netjawtz"},python),
+            ("Python inherits Cloudinary secret",node,{**python,"CLOUDINARY_API_SECRET":"DUMMY-NOT-REAL"}),
+            ("Node internal secret changes",{**node,"IDENTITY_AI_INTERNAL_KEY":fake_other},python),
+            ("Python internal secret changes",node,{**python,"IDENTITY_AI_INTERNAL_KEY":fake_other}),
+            ("Node production fingerprint equals staging",{**node,"VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256":sha(fake_key)},python),
+            ("Python production fingerprint equals staging",node,{**python,"VOLUNSERVE_PRODUCTION_INTERNAL_KEY_SHA256":sha(fake_key)}),
+            ("Node internal key absent",{**node,"IDENTITY_AI_INTERNAL_KEY":""},python),
+            ("Python internal key absent",node,{**python,"IDENTITY_AI_INTERNAL_KEY":""}),
+            ("Node has different declared Firebase project",{**node,"VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID":"demo-other-nonproduction-project"},python)
+          ]
+          for label,n,p in checks:
+            _,_,compatible=paired_status(n,p)
+            assert compatible is False, "Unsafe pair incorrectly passed: "+label
+          print("PASS:",len(checks),"cross-service unsafe scenarios rejected")
+          mismatch_python={**python,
+            "IDENTITY_AI_INTERNAL_KEY":fake_other,
+            "VOLUNSERVE_STAGING_INTERNAL_KEY_SHA256":sha(fake_other)
+          }
+          n,p,compatible=paired_status(node,mismatch_python)
+          assert n==p=="PASS" and compatible is False
+          print("PASS: independently valid but mismatched keys rejected by paired gate")
+          print("PASS: real hosted Node auth-check remains REQUIRED to verify actual shared key")
+          print("NO DEPLOY / NO CLOUD REQUEST / NO REAL CREDENTIALS / NO USER DATA")
+          PY
+# Read-only source and fake local values only, never actual Render calls, Firebase,
+# Cloudinary, ID image upload, live commits or user accounts.
+# This candidate does not certify hosted staging isolation or release readiness.
