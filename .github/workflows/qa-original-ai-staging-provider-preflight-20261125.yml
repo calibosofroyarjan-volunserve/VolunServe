@@ -23,14 +23,14 @@ jobs:
           script: |
             const assert = require('node:assert/strict');
             const {owner,repo}=context.repo;
-            const baseline='b229dbaa4714bd98ccbcc4191c6d49aefa897250';
+            const baseline='c20b9c0e93c96f511c659ae4cdad1125a24a0afc';
             const diff=await github.rest.repos.compareCommits({
               owner,repo,base:baseline,head:context.sha
             });
             assert.equal(diff.data.behind_by,0);
             assert.deepEqual((diff.data.files||[]).map(f=>f.filename),
               ['.github/workflows/qa-original-ai-staging-provider-preflight-20261125.yml'],
-              'Only the read-only preflight workflow may differ from the previously passing combined release candidate');
+              'Only the read-only preflight workflow may differ from the latest green combined release candidate');
             core.info('PASS: checked exact green combined security candidate; this commit adds only a read-only GitHub workflow');
       - name: STAGING-only public health and negative-auth security boundary observations
         run: |
