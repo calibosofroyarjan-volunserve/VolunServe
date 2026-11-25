@@ -1,0 +1,36 @@
+name: Emergency Response Manual QA (no deploy)
+on:
+  push:
+    branches:
+      - fix/restore-manual-volunteer-no-barangay-20261125
+    paths:
+      - "app/(admin)/admin-cases.tsx"
+      - "app/(tabs)/volunteer.tsx"
+      - "app/(tabs)/volunteer.web.tsx"
+      - "components/tabs/ResponseFlow.web.tsx"
+      - "components/tabs/MapTracking.native.tsx"
+      - "lib/emergencyArrival.ts"
+      - "scripts/test-emergency-response-flow-20261125.cjs"
+      - ".github/workflows/qa-manual-emergency-flow-20261125.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Static QA + TypeScript + Expo web export (isolated)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Emergency Response contract and proximity checks
+        run: node --test scripts/test-emergency-response-flow-20261125.cjs
+      - name: Verify TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Export standalone web bundle without deploying
+        run: npx expo export --platform web --output-dir dist
