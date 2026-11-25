@@ -1682,11 +1682,6 @@ export default function AdminCases() {
 
     const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
     const volunteerBarangay = normalizeBarangay(volunteer.barangay);
-    const sameBarangay =
-      Boolean(caseBarangay) &&
-      Boolean(volunteerBarangay) &&
-      caseBarangay === volunteerBarangay;
-
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1702,12 +1697,11 @@ export default function AdminCases() {
     if (!volunteerBarangay) {
       return { eligible: false, reason: "Volunteer profile has no barangay", skillMatches };
     }
-    if (!sameBarangay) {
-      return {
-        eligible: false,
-        reason: `Volunteer belongs to ${volunteer.barangay || "another barangay"}`,
-        skillMatches,
-      };
+    // Manual Admin selection permits support from any approved SJDM barangay.
+    // Volunteers still need an approved account, valid profile, skill match,
+    // and must not already have a conflicting emergency task.
+    if (!SJDM_BARANGAYS.some((barangay) => normalizeBarangay(barangay) === volunteerBarangay)) {
+      return { eligible: false, reason: "Volunteer must have a valid SJDM barangay", skillMatches };
     }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
@@ -3074,14 +3068,10 @@ export default function AdminCases() {
           );
         }
 
-        if (currentVolunteerBarangay !== currentCaseBarangay) {
-          throw new Error(
-            `${volunteer.fullName} is registered in ${
-              volunteer.barangay || "another barangay"
-            } and cannot be assigned to this ${
-              currentCaseBarangayRaw || "case"
-            } emergency.`
-          );
+        // This is an Admin-reviewed manual task, not automatic barangay matching.
+        // Approved Volunteers from any SJDM barangay can be considered.
+        if (!SJDM_BARANGAYS.some((barangay) => normalizeBarangay(barangay) === currentVolunteerBarangay)) {
+          throw new Error("Volunteer must have a valid SJDM barangay before assignment.");
         }
 
         if (responderLockSnapshot.exists()) {
