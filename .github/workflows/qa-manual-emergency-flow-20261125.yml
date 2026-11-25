@@ -7,6 +7,7 @@ on:
       - "app/(admin)/admin-cases.tsx"
       - "app/(tabs)/disaster-response.tsx"
       - "app/(tabs)/volunteer.tsx"
+      - "app/(tabs)/my-cases.tsx"
       - "app/(tabs)/volunteer.web.tsx"
       - "components/tabs/ResponseFlow.web.tsx"
       - "components/tabs/MapTracking.native.tsx"
