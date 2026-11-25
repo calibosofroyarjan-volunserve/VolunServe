@@ -1,0 +1,96 @@
+name: Original AI Admin Review Firebase Emulator E2E (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-live-parity-20261125
+    paths:
+      - scripts/qa-original-ai-admin-firestore-emulator-20261125.cjs
+      - .github/workflows/qa-original-ai-admin-firestore-emulator-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      CI: 'true'
+      FIREBASE_SERVICE_ACCOUNT_JSON: ''
+      GOOGLE_APPLICATION_CREDENTIALS: ''
+      CLOUDINARY_API_SECRET: ''
+      PAYMONGO_SECRET_KEY: ''
+      IDENTITY_AI_INTERNAL_KEY: ''
+      GCLOUD_PROJECT: demo-volunserve-original-ai-admin-qa
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-original-ai-admin-qa
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch only test harness and exact deployed Node route source (NO CHECKOUT)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs');
+            const path=require('path');
+            const {owner,repo}=context.repo;
+            const live='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const pinned=[
+              ['backend/server.js',live],
+              ['backend/selectedIdPolicy.js',live],
+              ['backend/identityIssuerReviewPolicy.js',live],
+              ['backend/adminAccess.js',live],
+              ['backend/verifiedFirebaseToken.js',live],
+              ['scripts/qa-original-ai-admin-firestore-emulator-20261125.cjs',context.sha],
+            ];
+            for(const [filename,ref] of pinned) {
+              const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
+              if(Array.isArray(data)||data.encoding!=='base64')throw new Error('Expected pinned source missing: '+filename);
+              const dest=path.join(process.env.GITHUB_WORKSPACE,'.qa-work',
+                filename.startsWith('scripts/')?'test-admin.js':filename);
+              fs.mkdirSync(path.dirname(dest),{recursive:true});
+              fs.writeFileSync(dest,Buffer.from(data.content,'base64'));
+              core.info('Read-only source: '+filename+' ('+ref.slice(0,9)+')');
+            }
+            core.info('No application source has been checked out or modified');
+      - name: Install local-only test runtime
+        run: |
+          npm install --prefix .qa-work --no-save --no-audit --no-fund --ignore-scripts \
+            express@5.1.0 firebase-admin@14.3.0 firebase-tools@14
+          node --check .qa-work/test-admin.js
+          node - <<'NODE'
+          const fs=require('node:fs');
+          fs.writeFileSync('.qa-work/emulators.json',JSON.stringify({
+            emulators:{
+              auth:{host:'127.0.0.1',port:9099},
+              firestore:{host:'127.0.0.1',port:8080},
+              ui:{enabled:false}
+            },
+            firestore:{rules:'.qa-work/firestore.rules'}
+          },null,2));
+          fs.writeFileSync('.qa-work/firestore.rules',
+            'rules_version = "2";\nservice cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if false; } } }\n');
+          console.log('PASS: explicit demo Auth + Firestore emulator config written, client rules deny all');
+          NODE
+      - name: Execute actual Admin authentication and Firestore transaction routes in emulators
+        run: |
+          test "$GCLOUD_PROJECT" = demo-volunserve-original-ai-admin-qa
+          test -z "$GOOGLE_APPLICATION_CREDENTIALS"
+          test -z "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          test -z "$CLOUDINARY_API_SECRET"
+          test -z "$PAYMONGO_SECRET_KEY"
+          test -z "$IDENTITY_AI_INTERNAL_KEY"
+          .qa-work/node_modules/.bin/firebase \
+            emulators:exec \
+            --project demo-volunserve-original-ai-admin-qa \
+            --only auth,firestore \
+            --config .qa-work/emulators.json \
+            "node .qa-work/test-admin.js"
+      - name: Confirm test was isolated
+        run: |
+          echo "PASS NO DEPLOY: Firebase DEMO project, localhost emulators, synthetic residents only"
+# No checkout of malformed legacy gitlink; no production deploy or secrets.
+# Firebase emulator executes in temporary CI runner and is destroyed on exit.
