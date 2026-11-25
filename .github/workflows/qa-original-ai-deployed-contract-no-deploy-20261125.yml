@@ -1,0 +1,142 @@
+name: Original AI deployed staging vs live route contract audit (GET ONLY / NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-stage-live-contract-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deployed-version-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Pin deployed source, compare contracts and safely replay GET-only readiness
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const vm = require('node:vm');
+            const {owner,repo}=context.repo;
+            const baseline='86db597ea12339ab6ddf403343288efeaa39901c';
+            const liveNode='d06aeb1e0a572bf8581a99d7064da0a8d2430ed4';
+            const livePython='319152e6a1cad5e54653c20e87bd1551a82b219e';
+            const stagedNode='353879c0ce8c566e71c1a3263ccce77e82459013';
+            const stagedPython='93c82384ded112210902ed815454265beebe96e0';
+            const allowed='.github/workflows/qa-original-ai-deployed-contract-no-deploy-20261125.yml';
+            const diff=await github.rest.repos.compareCommits({owner,repo,base:baseline,head:context.sha});
+            assert.equal(diff.data.behind_by,0,'Must preserve preceding isolated QA candidate');
+            assert.deepEqual((diff.data.files||[]).map(x=>x.filename),[allowed],
+              'Only GET-only source contract workflow may be added');
+            let passed=0;
+            const pass=(label)=>{passed++;core.info('PASS: '+label)};
+            pass('Only isolated no-deploy contract workflow added, no application file changes');
+
+            const read=async(filename,ref)=>{
+              const r=await github.rest.repos.getContent({owner,repo,path:filename,ref});
+              assert.equal(r.data.encoding,'base64','Pinned source unavailable: '+filename);
+              return Buffer.from(r.data.content,'base64').toString('utf8');
+            };
+            const [oldNode,newNode,oldPython,newPython,oldReadiness,newReadiness]=await Promise.all([
+              read('backend/server.js',stagedNode),
+              read('backend/server.js',liveNode),
+              read('identity-ai/main.py',stagedPython),
+              read('identity-ai/main.py',livePython),
+              read('backend/identityAiReadiness.js',stagedNode),
+              read('backend/identityAiReadiness.js',liveNode),
+            ]);
+            assert.ok(!oldNode.includes('"/api/identity/document/precheck-with-evidence"'));
+            assert.ok(newNode.includes('"/api/identity/document/precheck-with-evidence"'));
+            pass('Deployed staging Node lacks restored ID evidence precheck route while deployed live Node includes it');
+            assert.ok(!oldNode.includes('"/api/identity/verify-with-evidence"'));
+            assert.ok(newNode.includes('"/api/identity/verify-with-evidence"'));
+            pass('Deployed staging Node lacks restored face evidence route alias while deployed live Node includes it');
+            assert.ok(!oldPython.includes('@app.post("/document/precheck")'));
+            assert.ok(newPython.includes('@app.post("/document/precheck")'));
+            pass('Deployed staging Python lacks document precheck endpoint while deployed live Python includes it');
+            for(const key of ['documentOcrReady','profileComparisonReady','documentPrecheckReady']){
+              assert.ok(!oldPython.includes('"'+key+'"'), 'staging unexpectedly added '+key);
+              assert.ok(newPython.includes('"'+key+'"'), 'deployed live Python missing '+key);
+            }
+            pass('Deployed staging Python does not emit strict document readiness fields required by newer live Node');
+
+            const loadReadiness=(source)=>{
+              const mod={exports:{}};
+              const sandbox={module:mod,exports:mod.exports,require,fetch:()=>{throw new Error('Network denied')},
+                AbortSignal,setTimeout,clearTimeout};
+              vm.runInNewContext(source,sandbox,{timeout:2000});
+              assert.equal(typeof mod.exports.probeIdentityAiReadiness,'function');
+              return mod.exports.probeIdentityAiReadiness;
+            };
+            const oldProbe=loadReadiness(oldReadiness);
+            const newProbe=loadReadiness(newReadiness);
+            const origin='https://synthetic-original-ai.invalid';
+            const stub=async(probe,health,auth=200)=>{
+              const visits=[];
+              const answer=await probe({
+                endpoint:origin+'/verify',
+                internalKey:'SYNTHETIC_KEY_WITH_NO_HOSTED_CREDENTIAL',
+                healthTimeoutsMs:[100],authTimeoutsMs:[100],wait:async()=>{},
+                fetchImpl:async(url,args)=>{
+                  assert.equal(args.method,'GET','Never upload evidence or perform write');
+                  assert.ok(url===origin+'/health' || url===origin+'/api/internal/auth-check',
+                    'Unexpected HTTP route');
+                  visits.push(url);
+                  const isHealth=url.endsWith('/health');
+                  const status=isHealth?200:auth;
+                  return {ok:status===200,status,json:async()=>isHealth?health:{authenticated:auth===200}};
+                },
+              });
+              return {answer,visits};
+            };
+            const priorStageHealth={
+              ok:true,internalAuthConfigured:true,verificationEngineReady:true,
+              livenessImplemented:false,idDocumentAuthenticityVerified:false
+            };
+            const stageResult=await stub(oldProbe,priorStageHealth);
+            assert.equal(stageResult.answer.statusCode,200);
+            assert.equal(stageResult.visits.length,2);
+            pass('Existing staging Node readiness accepts old Python health under simulated correct private key');
+            const incompatibleResult=await stub(newProbe,priorStageHealth);
+            assert.equal(incompatibleResult.answer.statusCode,503);
+            assert.equal(incompatibleResult.answer.body.error,'identity_document_readiness_failed');
+            assert.equal(incompatibleResult.visits.length,1);
+            pass('New live Node safely blocks old staging Python readiness BEFORE private auth or face upload');
+            const readyHealth={...priorStageHealth,documentOcrReady:true,
+              profileComparisonReady:true,documentPrecheckReady:true};
+            const good=await stub(newProbe,readyHealth);
+            assert.equal(good.answer.statusCode,200);
+            assert.equal(good.answer.body.ready,true);
+            assert.equal(good.visits.length,2);
+            pass('New live Node accepts complete readiness only after synthetic successful private auth');
+            const denied=await stub(newProbe,readyHealth,401);
+            assert.equal(denied.answer.statusCode,503);
+            assert.equal(denied.answer.body.error,'identity_ai_auth_mismatch');
+            pass('New live Node rejects bad private key (synthetic only)');
+            const unhealthy=await stub(newProbe,{...readyHealth,documentOcrReady:false});
+            assert.equal(unhealthy.answer.statusCode,503);
+            assert.equal(unhealthy.answer.body.error,'identity_document_readiness_failed');
+            assert.equal(unhealthy.visits.length,1);
+            pass('New live Node denies failed OCR before private key call or media upload');
+            const noKey=await newProbe({endpoint:origin+'/verify',internalKey:'',
+              fetchImpl:()=>{throw new Error('Network should not execute');}});
+            assert.equal(noKey.statusCode,503);
+            assert.equal(noKey.body.error,'identity_ai_key_missing');
+            pass('New live Node refuses missing internal secret without network');
+
+            const publicHealthUrl='https://volunserve-identity-ai-staging.onrender.com/health';
+            const res=await fetch(publicHealthUrl,{method:'GET',redirect:'manual',
+              headers:{Accept:'application/json'},signal:AbortSignal.timeout(75000)});
+            assert.equal(res.status,200,'Staging Python public health must return 200');
+            const actualHealth=await res.json();
+            assert.equal(actualHealth.ok,true);
+            assert.equal(actualHealth.internalAuthConfigured,true);
+            assert.equal(actualHealth.verificationEngineReady,true);
+            const missing=['documentOcrReady','profileComparisonReady','documentPrecheckReady']
+              .filter(k=>actualHealth[k]!==true);
+            core.info('STAGING_GET_SAFE_HEALTH: HTTP 200, ready=true, missing strict document fields: '+missing.join(','));
+            assert.equal(missing.length,3,'Hosted staging contract changed; inspect before modifying');
+            pass('Actual hosted staging Python /health still lacks three strict document flags');
+            core.info('SUCCESS: '+passed+' pinned source and simulated GET-only checks');
+            core.warning('RELEASE BLOCKED: old staging missing original evidence routes; do not transplant old Python or assume live credentials');
+            core.warning('No real ID/selfie, no production request, no service deploy, no Firebase/Cloudinary calls, no paid API');
