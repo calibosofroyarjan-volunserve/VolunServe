@@ -1,0 +1,144 @@
+name: Original Face-Only AI Staging Provider Readiness Preflight (GET ONLY / NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-face-only-staging-preflight-20261125
+    paths:
+      - .github/workflows/qa-original-face-only-staging-public-preflight-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-staging-attestation:
+    name: Staging health, Cloudinary readiness and negative authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact protected live-backed source and no deployment modification
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const baseline='8b74ea3c45688a1f442ed9e56905c81329761e1d';
+            const diff=await github.rest.repos.compareCommits({
+              owner,repo,base:baseline,head:context.sha
+            });
+            assert.equal(diff.data.behind_by,0);
+            assert.deepEqual((diff.data.files||[]).map(f=>f.filename),
+              ['.github/workflows/qa-original-face-only-staging-public-preflight-20261125.yml'],
+              'Only the read-only preflight may differ from last successful Node staging isolation candidate');
+            core.info('PASS: checked exact guarded face-only Node candidate; only no-deploy health workflow added');
+      - name: STAGING-only public health and negative-auth security boundary observations
+        run: |
+          python - <<'PY'
+          import concurrent.futures
+          import json
+          import urllib.error
+          import urllib.request
+          from urllib.parse import urlparse
+
+          NODE='https://volunserve-backend-staging.onrender.com'
+          AI='https://volunserve-identity-ai-staging.onrender.com'
+          CHECKS={
+            'staging_node_public_health':(NODE+'/health',None),
+            'staging_python_public_health':(AI+'/health',None),
+            'staging_python_private_no_key':(AI+'/api/internal/auth-check',None),
+            'staging_python_private_fake_key':(AI+'/api/internal/auth-check',{'X-VolunServe-Internal-Key':'SYNTHETIC_WRONG_KEY_NOT_A_REAL_CREDENTIAL_20261125'}),
+            'staging_node_engine_anonymous':(NODE+'/api/identity/engine-health',None),
+            'staging_node_engine_fake_token':(NODE+'/api/identity/engine-health',{'Authorization':'Bearer SYNTHETIC_FAKE_TOKEN_NOT_A_JWT'}),
+            'staging_node_status_anonymous':(NODE+'/api/identity/status',None),
+            'staging_node_admin_anonymous':(NODE+'/api/admin/identity/reviews',None),
+          }
+          allowed={NODE,AI}
+          for url,_ in CHECKS.values():
+            parsed=urlparse(url)
+            assert parsed.scheme=='https'
+            assert parsed.netloc.endswith('-staging.onrender.com')
+            assert f'{parsed.scheme}://{parsed.netloc}' in allowed
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self,req,fp,code,msg,headers,newurl):
+              raise urllib.error.HTTPError(req.full_url,code,'redirect-denied',headers,fp)
+          opener=urllib.request.build_opener(NoRedirect())
+          def probe(item):
+            name,(url,extra)=item
+            headers={
+              'Accept':'application/json',
+              'User-Agent':'VolunServe-ReadOnly-OriginalAI-Staging-Audit'
+            }
+            headers.update(extra or {})
+            request=urllib.request.Request(url,method='GET',headers=headers)
+            try:
+              with opener.open(request,timeout=65) as response:
+                status=response.status
+                raw=response.read(4096)
+            except urllib.error.HTTPError as err:
+              status=err.code
+              raw=err.read(4096)
+            except Exception as err:
+              return name,{'http':'UNREACHABLE','cause':type(err).__name__}
+            data={}
+            try:
+              candidate=json.loads(raw)
+              if isinstance(candidate,dict):data=candidate
+            except Exception:pass
+            safe={}
+            if name=='staging_node_public_health':
+              for key in ('ok','service','identityEngine','assistanceEvidenceStorage'):
+                value=data.get(key)
+                if isinstance(value,(str,bool)):
+                  safe[key]=value if key not in ('service',) else str(value)[:75]
+            if name=='staging_python_public_health':
+              for key in ('ok','internalAuthConfigured','verificationEngineReady',
+                'documentOcrReady','documentPrecheckReady',
+                'profileComparisonReady','livenessImplemented',
+                'idDocumentAuthenticityVerified'):
+                value=data.get(key)
+                if isinstance(value,(str,bool)):safe[key]=value
+            # Never print auth response bodies, headers, unknown fields,
+            # identity numbers, signed URLs, error messages or request tokens.
+            return name,{'http':status,'health':safe}
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            result=dict(pool.map(probe,CHECKS.items()))
+          for name,observation in result.items():
+            print('STAGING_GET_OBSERVATION',name,json.dumps(observation,sort_keys=True))
+          blockers=[]
+          node=result['staging_node_public_health']
+          python=result['staging_python_public_health']
+          if node.get('http')!=200 or node.get('health',{}).get('ok') is not True:
+            blockers.append('Staging backend public health unavailable')
+          if python.get('http')!=200 or python.get('health',{}).get('ok') is not True:
+            blockers.append('Staging Python public health unavailable')
+          if node.get('health',{}).get('assistanceEvidenceStorage')!='secure_cloudinary_configured':
+            blockers.append('Staging backend Cloudinary secure storage NOT configured')
+          if python.get('health',{}).get('internalAuthConfigured') is not True:
+            blockers.append('Staging Python has no configured private API key')
+          if python.get('health',{}).get('verificationEngineReady') is not True:
+            blockers.append('Staging Python face engine not ready')
+          for name in (
+            'staging_python_private_no_key','staging_python_private_fake_key',
+            'staging_node_engine_anonymous','staging_node_engine_fake_token',
+            'staging_node_status_anonymous','staging_node_admin_anonymous'
+          ):
+            status=result[name].get('http')
+            if status==200:
+              raise SystemExit('CRITICAL: STAGING_PRIVATE_ENDPOINT_ALLOWED_UNAUTHORIZED_GET: '+name)
+            if status not in (401,403):
+              blockers.append('Expected unauthorized GET denial 401/403 missing: '+name)
+          # A distinct Render environment group and a Cloudinary configured
+          # flag CANNOT establish separate provider account ownership.
+          blockers.append('Independent staging Firebase service-account identity unverified via read-only Render metadata')
+          blockers.append('Independent staging Cloudinary account credential ownership unverified')
+          blockers.append('Actual Node-to-Python shared internal key match unverified: no raw secrets available')
+          for i,b in enumerate(blockers,1):
+            print('RELEASE_BLOCKER_%02d'%i,b)
+          print('RELEASE_DECISION: BLOCKED for hosted identity media and deployment')
+          print('AUDIT_SCOPE: eight STAGING HTTPS GETs only; face-only Node/Python candidates NOT deployed; zero production requests, zero uploads, zero paid services, zero Firebase writes')
+          PY
+# A passing GitHub workflow means observations executed safely; it is NOT
+# an approval for deployment or hosted private-ID media tests.
