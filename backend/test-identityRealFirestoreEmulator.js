@@ -95,6 +95,7 @@ async function scenario({
   faceCalibrated=true,padUnavailable=false,
   wrongSelfie=false,staleLease=false,
   reuseUid=null,requestIdOverride=null,proofId=null,
+  issuerProofId=null,padProofId=null,
   decision="manual_review",
 }={}){
   const id=nextId();
@@ -121,7 +122,7 @@ async function scenario({
       verificationId,documentType:wrongIdType?"passport":docType,
       proofType:kind,
       proofKind:kind==="issuer"?"trusted_independent_issuer":"validated_presentation_attack_detection",
-      jti:proofId||"signedEvidence"+id,
+      jti:(kind==="issuer"?issuerProofId:padProofId)||proofId||"signedEvidence"+id,
       iat:now-5,exp:now+(expiredIssuer&&kind==="issuer"?-1:120),
       [kind==="issuer"?"documentGenuine":"livePersonConfirmed"]:true,
     };
@@ -286,6 +287,22 @@ test("REAL emulator: reissued signed proof JWT IDs cannot approve a second Resid
   assert.equal((await second.auditRef.get()).exists,false);
   assert.equal((await second.attemptRef.get()).exists,false);
 });
+for (const proofKind of ["issuer","pad"]) {
+  test("REAL emulator: reusing only the signed "+proofKind+" proof blocks a new Resident",async()=>{
+    const common="uniqueReissued"+proofKind+"Proof123";
+    const override=proofKind==="issuer"
+      ? {issuerProofId:common}
+      : {padProofId:common};
+    const first=await scenario(override);
+    assert.equal((await first.finalize()).status,"verified");
+    const second=await scenario(override);
+    assert.equal(second.autoCompletion.eligible,true);
+    await assert.rejects(second.finalize(),error=>
+      error.code==="trusted_proof_already_consumed");
+    assert.equal((await second.userRef.get()).data().identityVerified,false);
+    assert.equal((await second.auditRef.get()).exists,false);
+  });
+}
 test("REAL emulator: status lookup does not expose other Residents",async()=>{
   const f=await scenario();
   await f.finalize();
