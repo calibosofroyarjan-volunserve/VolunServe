@@ -35,6 +35,14 @@ function resolveTrustedAutomaticCompletion({
     return blocked("trusted_independent_provider_proofs_missing");
   if (!["verified", "manual_review"].includes(aiDecision))
     return blocked("ai_comparison_failed_or_unsupported");
+  // A completed independent proof MUST be consumable exactly once in the
+  // same Firestore transaction that grants Verified Resident privileges.
+  const issuerKey = assessment.trustedProofReplayKeys?.issuer;
+  const padKey = assessment.trustedProofReplayKeys?.pad;
+  if (typeof issuerKey !== "string" || typeof padKey !== "string" ||
+      !/^[a-f0-9]{64}$/.test(issuerKey) ||
+      !/^[a-f0-9]{64}$/.test(padKey) || issuerKey === padKey)
+    return blocked("trusted_proof_replay_receipts_missing");
   if (!selectedIdRecognized(screening))
     return blocked("selected_government_id_not_recognized");
 
@@ -55,7 +63,10 @@ function resolveTrustedAutomaticCompletion({
         !["jpg", "jpeg", "png", "webp"].includes(a.format))
       return blocked("missing_or_untrusted_private_" + slot);
   }
-  return {eligible:true, reason:"trusted_issuer_pad_and_face_validated"};
+  return {
+    eligible:true, reason:"trusted_issuer_pad_and_face_validated",
+    trustedProofReplayKeys:Object.freeze({issuer:issuerKey,pad:padKey}),
+  };
 }
 
 module.exports = {resolveTrustedAutomaticCompletion};
