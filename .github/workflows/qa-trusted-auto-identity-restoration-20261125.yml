@@ -9,6 +9,7 @@ on:
       - backend/identityTrustedSignedProof.js
       - backend/TRUSTED-AUTO-VERIFICATION-INTEGRATION.md
       - backend/test-identityTrustedSignedProof.js
+      - backend/test-identityAutomaticTransactionIntegration.js
       - backend/test-identityAutoApprovalGateway.js
       - backend/test-identity-final-admin-only.js
       - .github/workflows/qa-trusted-auto-identity-restoration-20261125.yml
@@ -46,6 +47,7 @@ jobs:
             'backend/identityTrustedSignedProof.js',
             'backend/TRUSTED-AUTO-VERIFICATION-INTEGRATION.md',
             'backend/test-identityTrustedSignedProof.js',
+            'backend/test-identityAutomaticTransactionIntegration.js',
             'backend/test-identityAutoApprovalGateway.js',
             'backend/test-identity-final-admin-only.js',
           ].sort();
@@ -61,6 +63,8 @@ jobs:
           node --test backend/test-identityTrustedAutomaticCompletion.js
           node --check backend/identityTrustedSignedProof.js
           node --test backend/test-identityTrustedSignedProof.js
+          node --check backend/test-identityAutomaticTransactionIntegration.js
+          node --test backend/test-identityAutomaticTransactionIntegration.js
           node --test backend/test-automaticIdentityApprovalPolicy.js
           node --test backend/test-identityAutoApprovalGateway.js
           node --test backend/test-identityIssuerReviewPolicy.js
