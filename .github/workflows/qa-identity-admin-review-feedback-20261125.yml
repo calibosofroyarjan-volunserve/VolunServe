@@ -1,0 +1,83 @@
+name: Original AI Admin Review Feedback and Evidence Gate (NO DEPLOY)
+on:
+  push:
+    branches: [qa/identity-admin-review-feedback-20261125]
+    paths:
+      - app/(admin)/identity-reviews.tsx
+      - .github/workflows/qa-identity-admin-review-feedback-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-ai-admin-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Ensure current live Hosting source and strict Admin-only diff
+        run: |
+          set -eu
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='38a570cb6c300c5ef0fa5958264d77db2bcb181d';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          cp.execFileSync('git',['diff','--check',base,'HEAD']);
+          const changed=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-identity-admin-review-feedback-20261125.yml',
+            'app/(admin)/identity-reviews.tsx'
+          ].sort());
+          console.log('PASS: only the Admin identity review UI and read-only QA changed');
+          JS
+      - name: Check independent review conditions and visible browser decisions
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const code=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+          const checks=[
+            ['Admin only',code.includes('role === "admin"') && code.includes('profile.status === "approved"')],
+            ['Authenticated queue GET',code.includes('/api/admin/identity/reviews') && code.includes('Bearer')],
+            ['Authenticated private photo GET',code.includes('}/evidence') && code.includes('getIdToken(true)')],
+            ['Explicit preliminary face check',code.includes('item.faceComparisonPassed === true')],
+            ['National ID constraint retained',code.includes('item.documentScreening?.declaredIdType === "national_id"')],
+            ['Only pending entries actionable',code.includes('const pending = reviewBucket(item) === "pending"')],
+            ['Admin must inspect front and selfie first',code.includes('evidenceUris?.front && evidenceUris?.selfie')],
+            ['Signed URLs cannot be missing or fetch-error',code.includes('!evidenceLoading && !evidenceError')],
+            ['Independent Admin ID method required',code.includes('if (action === "verify" && !validationMethod)')],
+            ['Independent attestation and notes required',code.includes('!issuerReviewAttested || notes.trim().length < 10')],
+            ['Cannot approve without evidence',code.includes('!eligibleFaceOnly || !faceOnlyEvidenceReady')],
+            ['Error/status banner always available for web',code.includes('accessibilityRole="alert"') && code.includes('{decisionFeedback}')],
+            ['Retry, rejection and save errors visible',code.includes('showDecisionFeedback("Enter at least 5 characters') && code.includes('Unable to save the decision.')],
+            ['No automatic resident verification in Admin page',!code.includes('identityVerified: true,')],
+            ['Private evidence refresh remains available',code.includes('setEvidenceRefresh(value=>value+1)')]
+          ];
+          for(const [title,passed] of checks){
+            assert(passed,'QA FAILED: '+title);
+            console.log('PASS:',title);
+          }
+          console.log('SCOPE: source checks only, no real user verification, no Cloudinary or Firebase writes, no deployment');
+          JS
+      - name: Type-check original Expo app with Admin-only modifications
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Export website to verify Admin screen compiles without deployment
+        run: |
+          npx expo export --platform web --output-dir dist
+          test -f dist/index.html
+          echo "PASS: static Hosting build only, production unchanged"
+# Never deploy from this QA branch. No real ID/selfie or Admin decisions.
