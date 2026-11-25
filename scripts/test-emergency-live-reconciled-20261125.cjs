@@ -61,6 +61,37 @@ test("Resident and Volunteer screens never trigger automatic Volunteer fan-out",
   assert.match(admin,/automaticStatus="off"/);
 });
 
+test("pinned deployed Render auto-invite controller stays off without explicit production approvals",()=>{
+  // Read the exact commit reported as live by Render. Do not use production
+  // credentials, modify env settings, or call any actual API endpoints.
+  const {execFileSync}=require("node:child_process");
+  const release="4308ff0eef985dcd0777c96906e61540bb9d7fd2";
+  const source=execFileSync("git",["show",release+":backend/renderEmergencyAutoInvites.js"],{
+    encoding:"utf8",timeout:20000,maxBuffer:1024*1024
+  });
+  assert.match(source,/VOLUNSERVE_RENDER_AUTO_ENABLED/);
+  assert.match(source,/VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED/);
+  const m={exports:{}};
+  vm.runInNewContext(source,{
+    exports:m.exports,module:m,process:{env:{}},
+    require:(p)=>{
+      assert.equal(p,"../functions/emergencySimpleAutoInvite");
+      return {volunteerAllowed:()=>false};
+    },
+    Date,Math,Number,Set,Map,Array,Object,JSON,RegExp,Error,Promise
+  },{filename:"deployed-render-auto-controller.js",timeout:1000});
+  const {config}=m.exports;
+  const production={FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:"volunserve-3aa5b"}),
+    VOLUNSERVE_RENDER_AUTO_PROJECT_ID:"volunserve-3aa5b"};
+  assert.equal(config({}).enabled,false);
+  assert.equal(config(production).enabled,false);
+  assert.equal(config({...production,VOLUNSERVE_RENDER_AUTO_ENABLED:"true"}).enabled,false);
+  assert.equal(config({...production,VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"}).enabled,false);
+  assert.equal(config({...production,VOLUNSERVE_RENDER_AUTO_ENABLED:"true",
+    VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED:"true"}).enabled,true);
+  // Gate source behavior is established; deployed env values remain UNKNOWN.
+});
+
 test("Volunteer web/native one-tap completion has no required Field Report",()=>{
   for(const s of [volunteer,volunteerWeb]){
     for(const key of ['accepted: "offered"','declined: "offered"','responding: "accepted"','on_site: "responding"','completed: "on_site"']) {
