@@ -25,6 +25,7 @@ jobs:
             assert.deepEqual((data.files||[]).map(f=>f.filename).sort(),[
               '.github/workflows/qa-unified-original-face-only-20261125.yml',
               'backend/server.js',
+              'backend/test-original-face-only-qa-20261125.cjs',
               'backend/test-original-face-only-integration-20261125.cjs',
               'identity-ai/main.py',
               'scripts/test-original-face-only-python-20261125.py',
