@@ -1,4 +1,4 @@
-name: Release Verified Admin Identity Photo Loading to Hosting (GUARDED)
+name: Release Admin Face Match Status Label to Hosting (GUARDED)
 on:
   push:
     branches: [release/original-face-only-hosting-20261125]
@@ -21,7 +21,7 @@ jobs:
       EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
       EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
       VOLUNSERVE_HOSTING_URL: https://volunserve.com
-      PINNED_HOSTING_SHA: a35d708829047fe86f04d988ad21966457ccbdea
+      PINNED_HOSTING_SHA: 75508bb5e1c16f53d7d90a2abecbd0005ebd5858
       SITE: volunserve-3aa5b
       BACKUP_CHANNEL: original-face-only-before-20261125
     steps:
@@ -45,15 +45,15 @@ jobs:
           const changed=cp.execFileSync('git',['diff','--name-only',baseline,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
           assert.deepEqual(changed,[
             '.github/workflows/release-original-face-only-hosting-20261125.yml',
-            'scripts/identity-admin-photo-loaded-rollback-20261125.cjs',
+            'scripts/identity-admin-face-match-label-rollback-20261125.cjs',
             'app/(admin)/identity-reviews.tsx'
           ].sort(),'BLOCKED: unrelated or newer production features would be overwritten');
           const current=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
           const crypto=require('node:crypto');
           const blob=crypto.createHash('sha1')
             .update('blob '+Buffer.byteLength(current)+'\0'+current).digest('hex');
-          assert.equal(blob,'0b66510fde71c26615a8c57824f02048056c457b',
-            'BLOCKED: Admin UI differs from successful QA run 45555223206');
+          assert.equal(blob,'b2206d8b743d2ff1a322f4f0775832ddf2466e3b',
+            'BLOCKED: Admin UI differs from successful QA run 45556349400');
           assert(current.includes('evidenceUris?.front && evidenceUris?.selfie'));
           assert(current.includes('loadedEvidenceUris.front === evidenceUris.front'));
           assert(current.includes('loadedEvidenceUris.selfie === evidenceUris.selfie'));
@@ -62,12 +62,19 @@ jobs:
           assert(current.includes('!eligibleFaceOnly || !faceOnlyEvidenceReady'));
           assert(current.includes('showDecisionFeedback'));
           assert(current.includes('issuerReviewAttested'));
+          assert(current.includes('const faceMatchLabel = item.faceComparisonPassed === true'));
+          assert(current.includes('? "Face Match"'));
+          assert(current.includes('"Match Not Confirmed"'));
+          assert(current.includes('{faceMatchLabel}'));
+          assert(!current.includes('{faceScore}'));
+          assert(!current.includes('faceScore + " preliminary similarity"'));
+          assert(current.includes('Preliminary face comparison passed. Independent Admin ID validation is still required.'));
           const published=cp.execFileSync('git',['show',baseline+':app/identity-verification.web.tsx'],{encoding:'utf8'});
           const stillLive=fs.readFileSync('app/identity-verification.web.tsx','utf8');
           assert.equal(stillLive,published,'BLOCKED: Resident original face-only scan page has changed');
           const api=fs.readFileSync('lib/identityVerification.ts','utf8');
           assert(api.includes('/api/identity/verify-face-only'));
-          console.log('PASS: only QA-green Admin signed-photo render and expiration gate changed');
+          console.log('PASS: QA-green Face Match result label only, no changes to private photo or Admin validation guards');
           JS
       - name: Verify old Hosting revision is still LIVE before taking any action
         run: VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA" node scripts/check-live-hosting.cjs
@@ -141,10 +148,10 @@ jobs:
           set -euo pipefail
           export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
           node scripts/check-live-hosting.cjs
-          PIN="$RUNNER_TEMP/identity-admin-photo-loaded-pinned-immutable-hosting.json"
-          node scripts/identity-admin-photo-loaded-rollback-20261125.cjs selftest
-          node scripts/identity-admin-photo-loaded-rollback-20261125.cjs capture "$PIN"
-          node scripts/identity-admin-photo-loaded-rollback-20261125.cjs check "$PIN"
+          PIN="$RUNNER_TEMP/identity-admin-face-match-label-pinned-immutable-hosting.json"
+          node scripts/identity-admin-face-match-label-rollback-20261125.cjs selftest
+          node scripts/identity-admin-face-match-label-rollback-20261125.cjs capture "$PIN"
+          node scripts/identity-admin-face-match-label-rollback-20261125.cjs check "$PIN"
           echo "BACKUP_PINNED: existing exact Firebase Hosting live version is ready for immutable restore"
           # Roll back this exact pinned, previously LIVE version if deployment OR
           # any post-deploy verification fails. No preview-channel creation needed.
@@ -154,7 +161,7 @@ jobs:
             trap - EXIT
             if [ "$STATUS" -ne 0 ] && [ "$DEPLOY_STARTED" = 1 ]; then
               echo "::error::Hosting publication failed verification. Attempting exact-version Firebase Hosting rollback."
-              if node scripts/identity-admin-photo-loaded-rollback-20261125.cjs rollback "$PIN"; then
+              if node scripts/identity-admin-face-match-label-rollback-20261125.cjs rollback "$PIN"; then
                 export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
                 node scripts/check-live-hosting.cjs || echo "::error::Rollback accepted; old public marker still unverified."
               else
@@ -165,7 +172,7 @@ jobs:
           }
           trap restore_if_failed EXIT
           # Final compare to avoid a race with another Hosting deployment.
-          node scripts/identity-admin-photo-loaded-rollback-20261125.cjs check "$PIN"
+          node scripts/identity-admin-face-match-label-rollback-20261125.cjs check "$PIN"
           DEPLOY_STARTED=1
           npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
           export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
@@ -176,4 +183,4 @@ jobs:
           done
           test "$VERIFIED" = 1 || { echo "::error::New live Hosting revision could not be confirmed"; exit 1; }
           trap - EXIT
-          echo "RELEASE_SUCCESS: Admin requires actual private ID/selfie rendered before verification, links expire; Hosting only"
+          echo "RELEASE_SUCCESS: Admin result displays Face Match instead of numeric similarity; Hosting only; no verification logic changed"
