@@ -1,0 +1,121 @@
+name: Original AI Current Dual-Deployed Source Parity (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/original-ai-live-dual-deploy-parity-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  live-source-contract:
+    name: Pinned Node + Python source contract and original matcher
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch exact independently deployed source snapshots (no secrets, no deploy)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const fs=require('node:fs');
+            const path=require('node:path');
+            const {owner,repo}=context.repo;
+            const nodeDeployed='d3308da6107f517061f5022997a229de9d05a0cb';
+            const pythonDeployed='737dd2b68f21840a6fd72b1af61c18b1e8b72e89';
+            const pythonPrior='319152e6a1cad5e54653c20e87bd1551a82b219e';
+            const workflow='.github/workflows/qa-original-ai-live-dual-deploy-parity-20261125.yml';
+            const cmp=await github.rest.repos.compareCommits({
+              owner,repo,base:nodeDeployed,head:context.sha
+            });
+            assert.equal(cmp.data.behind_by,0,'QA branch is missing deployed Node commits');
+            assert.deepEqual((cmp.data.files||[]).map(f=>f.filename),[workflow],
+              'Candidate may only add this no-deploy workflow to exact deployed Node source');
+            async function fetchExact(filename,ref,outname){
+              const {data}=await github.rest.repos.getContent({owner,repo,path:filename,ref});
+              assert.equal(data.encoding,'base64','Expected file for '+filename);
+              const bytes=Buffer.from(data.content,'base64');
+              const output=path.join(process.env.GITHUB_WORKSPACE,'.qa-dual',outname);
+              fs.mkdirSync(path.dirname(output),{recursive:true});
+              fs.writeFileSync(output,bytes);
+              core.info('Pinned source '+filename+' @ '+ref.slice(0,12)+' without credentials or network calls to Render');
+              return bytes;
+            }
+            const pinnedNode=await fetchExact('backend/server.js',nodeDeployed,'server.js');
+            const headNode=await fetchExact('backend/server.js',context.sha,'branch-server.js');
+            assert.ok(pinnedNode.equals(headNode),'QA branch changed deployed Node server');
+            await fetchExact('backend/identityAiReadiness.js',nodeDeployed,'identityAiReadiness.js');
+            await fetchExact('backend/identityPrivateEvidence.js',nodeDeployed,'identityPrivateEvidence.js');
+            await fetchExact('identity-ai/main.py',pythonDeployed,'current-main.py');
+            await fetchExact('identity-ai/main.py',pythonPrior,'previous-main.py');
+            core.info('PASS: exact currently observed production Node and Python SHAs are pinned independently');
+      - name: JS syntax and original Node safety contract
+        run: |
+          set -eu
+          node --check .qa-dual/server.js
+          node --check .qa-dual/identityAiReadiness.js
+          node --check .qa-dual/identityPrivateEvidence.js
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const node=fs.readFileSync('.qa-dual/server.js','utf8');
+          const readiness=fs.readFileSync('.qa-dual/identityAiReadiness.js','utf8');
+          const evidence=fs.readFileSync('.qa-dual/identityPrivateEvidence.js','utf8');
+          const checks=[
+            ['dedicated resident face-only route',node.includes('"/api/identity/verify-face-only"')],
+            ['Firebase-authenticated verify route',/app\.post\(\s*\["\/api\/identity\/verify",\s*"\/api\/identity\/verify-with-evidence",\s*"\/api\/identity\/verify-face-only"\],\s*requireFirebaseUser/.test(node)],
+            ['feature flag defaults disabled',node.includes('VOLUNSERVE_FACE_ONLY_ENABLED || ""')],
+            ['uses dedicated AI forwarding',node.includes('replace(/\/verify$/, "/verify-face-only")')],
+            ['consented private photos required',node.includes('requiresPrivateEvidence = faceOnly ||')],
+            ['uncertain matches fail closed',node.includes('faceComparisonPassed ? "manual_review" : "failed"')],
+            ['no AI-only Verified Resident status',node.includes('identityVerified: false,')],
+            ['independent Admin ID review gate',node.includes('"face_only_independent_review_required"') && node.includes('issuerReviewAttested')],
+            ['private media uploader retained',evidence.includes('uploadIdentityEvidence') && evidence.includes('signedIdentityEvidence')],
+            ['health retries are GET-only',readiness.includes('Retry GET /health only')]
+          ];
+          for(const [label,ok] of checks){
+            assert.ok(ok,'Live source contract missing: '+label);
+            console.log('PASS SOURCE CONTRACT:',label);
+          }
+          console.log('SOURCE-ONLY CHECK: no biometric accuracy, real user, production runtime flag, Cloudinary upload or hosted end-to-end verified');
+          NODE
+      - name: Python face-only syntax, original matcher parity and manual review constraints
+        run: |
+          set -eu
+          python -m py_compile .qa-dual/current-main.py .qa-dual/previous-main.py
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          now=Path('.qa-dual/current-main.py').read_text()
+          old=Path('.qa-dual/previous-main.py').read_text()
+          def find(src,name):
+              return next(x for x in ast.parse(src).body
+                          if isinstance(x,(ast.FunctionDef,ast.AsyncFunctionDef)) and x.name==name)
+          assert ast.get_source_segment(now,find(now,'run_face_verification')) == \
+                 ast.get_source_segment(old,find(old,'run_face_verification')), \
+                 'Original MediaPipe matcher changed'
+          print('PASS: original run_face_verification matcher is byte-for-byte unchanged')
+          verify=find(now,'verify_identity')
+          decorators=[ast.get_source_segment(now,x) or '' for x in verify.decorator_list]
+          assert any('verify-face-only' in d for d in decorators)
+          assert any('"/verify"' in d for d in decorators)
+          assert 'require_internal_backend(' in ast.get_source_segment(now,verify)
+          assert 'face_only = request.url.path == "/verify-face-only"' in now
+          assert 'if face_only and id_type != "national_id":' in now
+          assert 'run_face_verification,' in now
+          assert '"faceComparisonPassed": face_comparison_passed' in now
+          assert '"authenticityVerified": False' in now
+          assert '"manualReviewRequired": True' in now
+          print('PASS: same authenticated function serves dedicated face-only and existing OCR routes')
+          print('PASS: National ID only, authenticity unverified, review required')
+          print('NO DEPLOY: source/syntax assertions only; actual key equality, provider isolation and real biometric E2E still BLOCKED')
+          PY
+# This workflow does not call Render, Firebase or Cloudinary and never writes production.
+# The two pinned SHAs describe observed deployments on 2026-11-25; recheck Render
+# before any future release. A green run is not a deployment authorization.
