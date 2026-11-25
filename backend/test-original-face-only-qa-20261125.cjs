@@ -96,3 +96,50 @@ test("face-only readiness skips OCR but always proves private Node-Python authen
   assert.equal(strict.statusCode,503);
   assert.equal(strict.body.error,"identity_document_readiness_failed");
 });
+
+test("private front+face evidence uses authenticated Cloudinary upload, no reverse required",async()=>{
+  const {uploadIdentityEvidence}=require("./identityPrivateEvidence");
+  const uploads=[];
+  const cloudinary={
+    uploader:{upload_stream:(options,done)=>{
+      const stream={on(){return this;},end(bytes){
+        uploads.push({options,bytes});
+        done(null,{asset_id:"SYNTHETIC_ASSET_"+uploads.length,
+          public_id:options.public_id,format:"jpg"});
+      }};
+      return stream;
+    }},
+  };
+  const uid="syntheticresident123", requestId="syntheticrequest123";
+  const images={front:{data:fakeJpeg(1),mime:"image/jpeg"},
+                selfie:{data:fakeJpeg(2),mime:"image/jpeg"}};
+  const assets=await uploadIdentityEvidence({images,uid,requestId,cloudinary,
+    configureCloudinary:()=>{}});
+  assert.deepEqual(Object.keys(assets).sort(),["front","selfie"]);
+  assert.equal(uploads.length,2);
+  assert.ok(uploads.every(item=>item.options.type==="authenticated"));
+  assert.ok(uploads.every(item=>item.options.overwrite===false));
+  assert.ok(uploads.every(item=>item.options.public_id.startsWith("volunserve/identity-private/"+uid+"/")));
+  assert.equal(assets.front.deliveryType,"authenticated");
+  assert.equal(assets.selfie.deliveryType,"authenticated");
+});
+test("private Admin URLs still exclude missing back and expire; no secrets/media printed",()=>{
+  const {signedIdentityEvidence}=require("./identityPrivateEvidence");
+  const uid="syntheticresident123",requestId="syntheticrequest123";
+  const seen=[];
+  const cloudinary={utils:{private_download_url:(name,fmt,options)=>{
+    seen.push({name,fmt,options});
+    return "https://synthetic.invalid/"+name;
+  }}};
+  const asset=(slot)=>({publicId:"volunserve/identity-private/"+uid+"/"+requestId+"/"+slot,
+    format:"jpg",resourceType:"image",deliveryType:"authenticated"});
+  const result=signedIdentityEvidence({uid,assets:{front:asset("front"),selfie:asset("selfie")},
+    cloudinary,configureCloudinary:()=>{}});
+  assert.ok(result.images.front);
+  assert.ok(result.images.selfie);
+  assert.equal(result.images.back,null);
+  assert.equal(seen.length,2);
+  assert.ok(seen.every(item=>item.options.type==="authenticated"));
+  assert.ok(result.expiresAt>=Math.floor(Date.now()/1000));
+  assert.ok(result.expiresAt<=Math.floor(Date.now()/1000)+181);
+});
