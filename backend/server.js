@@ -4953,6 +4953,26 @@ app.get(
     }
   },
 );
+// The original Oct-23 National-ID face-only mode must NOT depend on OCR
+// readiness, but still requires Firebase auth and the matching private
+// Node-to-Python internal key. Disabled unless explicitly opted in.
+app.get("/api/identity/face-engine-health", requireFirebaseUser, async (_request, response) => {
+  response.set("Cache-Control", "no-store");
+  if (String(process.env.VOLUNSERVE_FACE_ONLY_ENABLED || "").trim() !== "true") {
+    return response.status(404).json({error:"face_only_disabled",message:"Face-only verification is disabled."});
+  }
+  try {
+    const result = await probeIdentityAiReadiness({
+      endpoint: getIdentityAiEndpoint(),
+      internalKey: String(process.env.IDENTITY_AI_INTERNAL_KEY || "").trim(),
+      requireDocumentReadiness: false,
+    });
+    return response.status(result.statusCode).json(result.body);
+  } catch {
+    return response.status(503).json({ok:false,ready:false,error:"identity_ai_unreachable"});
+  }
+});
+
 // Authenticated OCR-only document precheck BEFORE webcam/selfie collection.
 // Images stay transient; only bounded rate-limit counters are stored.
 // This does not consume any of the 3 actual face-verification attempts.
