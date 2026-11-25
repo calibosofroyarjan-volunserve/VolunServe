@@ -2270,7 +2270,9 @@ function UploadIdStep({
       <View style={[styles.idCaptureGrid, compactDesktop && styles.idCaptureGridDesktop]}>
       {([
         { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
-        ...(faceOnlyMode || idType === "passport" ? [] : [
+        // Keep the SAME side-by-side Front / Back ID cards as the live design.
+        // In original face-only mode the back card stays visible but is optional.
+        ...(idType === "passport" ? [] : [
           { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
         ]),
       ]).map(({ side, label, media, open, remove }) => (
@@ -2342,7 +2344,9 @@ function UploadIdStep({
                 {side === "front" ? "Front of National ID" : "Back of National ID"}
               </Text>
               <Text style={styles.idCaptureHint}>
-                Upload or capture the {side === "front" ? "front" : "back"} side of your National ID.
+                {faceOnlyMode && side === "back"
+                  ? "Optional for face comparison. An Admin may request the back for independent ID review."
+                  : `Upload or capture the ${side === "front" ? "front" : "back"} side of your National ID.`}
               </Text>
               <View style={styles.idCaptureActions}>
                 <TouchableOpacity accessibilityRole="button"
@@ -2375,7 +2379,7 @@ function UploadIdStep({
         </View>
         <Text style={styles.consentText}>
           {faceOnlyMode ?
-            "I consent to private processing of my National ID portrait for 1-to-1 face comparison, with no OCR or ID-text scanning. Consented photos may be retained up to 30 days for Admin review. Face matching alone does not authenticate an ID or grant Verified status." :
+            "I consent to private processing of my National ID front (and optional back) and the selfie I will capture next for 1-to-1 face comparison and authorized Admin review. No OCR or ID-text scanning. Submitted photos may be retained securely for up to 30 days. Face matching alone does not authenticate the ID or grant Verified status." :
             "I consent to privately processing my ID front and back for OCR screening. If unclear and referred to LGU Admin, those ID photos may be securely retained for up to 30 days. No selfie is captured at this stage. OCR does not confirm government ID authenticity."}
         </Text>
       </TouchableOpacity>
