@@ -298,6 +298,8 @@ export default function IdentityVerificationWeb() {
   const [idAutoProgress, setIdAutoProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  // Keep visible results for repeated manual status checks, even if still Pending.
+  const [statusFeedback, setStatusFeedback] = useState("");
   const [statusResult, setStatusResult] =
     useState<IdentityVerificationStatusResult | null>(null);
   const [localMessage, setLocalMessage] = useState("");
@@ -445,18 +447,32 @@ export default function IdentityVerificationWeb() {
 
     try {
       setCheckingStatus(true);
+      if (!silent) setStatusFeedback("Checking the latest status...");
       const result = await getIdentityVerificationStatus();
       setStatusResult(result);
 
-      if (!silent && result.message) {
-        setLocalMessage(result.message);
+      if (!silent) {
+        const checkedAt = new Date().toLocaleTimeString([], {
+          hour: "numeric", minute: "2-digit", second: "2-digit",
+        });
+        setStatusFeedback(
+          result.identityStatus === "pending"
+            ? `Checked at ${checkedAt} — still waiting for Admin review.`
+            : result.identityStatus === "verified"
+              ? `Checked at ${checkedAt} — Admin verification completed.`
+              : result.identityStatus === "failed"
+                ? `Checked at ${checkedAt} — a retry or Admin action is needed.`
+                : `Checked at ${checkedAt} — no active verification review found.`,
+        );
+        if (result.message) setLocalMessage(result.message);
       }
     } catch (error: any) {
       if (!silent) {
-        setLocalMessage(
+        // Show a refresh failure separately; do not overwrite the saved review.
+        setStatusFeedback(
           error?.message
-            ? `Unable to check verification status: ${error.message}`
-            : "Unable to check verification status. Please try again.",
+            ? `Unable to refresh status: ${error.message}`
+            : "Unable to refresh status. Please try again.",
         );
       }
     } finally {
@@ -1483,7 +1499,7 @@ export default function IdentityVerificationWeb() {
           setStep(1);
         }}
         secondaryLabel="Back to Profile"
-        secondaryAction={() => router.back()}
+        secondaryAction={() => router.replace("/(tabs)/profile")}
       />
     );
   }
@@ -1505,10 +1521,18 @@ export default function IdentityVerificationWeb() {
         idPreviewLabel={selectedIdLabel}
         documentScreening={statusResult?.documentScreening}
         primaryLabel="Back to Profile"
-        primaryAction={() => router.back()}
+        primaryAction={() => router.replace("/(tabs)/profile")}
       />
     );
   }
+
+  // Historical face-only attempts intentionally do not run document OCR.
+  // The status API currently returns a generic inconclusive screening object,
+  // so use the authenticated server's explicit face-only result message.
+  // Never present that generic object as "ID rejected" for a pending review.
+  const originalFaceOnlyPending = effectiveStatus === "pending" &&
+    (statusResult?.message?.startsWith("Original face-only comparison completed.") === true ||
+      localMessage.startsWith("Original face-only comparison completed."));
 
   if (effectiveStatus === "pending") {
     return (
@@ -1525,14 +1549,18 @@ export default function IdentityVerificationWeb() {
         badge="Pending"
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
-        documentScreening={statusResult?.documentScreening}
+        documentScreening={originalFaceOnlyPending ? undefined : statusResult?.documentScreening}
+        notice={originalFaceOnlyPending
+          ? "Face-only mode did not perform OCR or authenticate the National ID. Your scan remains pending independent Admin inspection."
+          : undefined}
+        feedback={statusFeedback}
         primaryLabel={
           checkingStatus ? "Checking..." : "Check Status"
         }
         primaryAction={() => void refreshStatus()}
         loading={checkingStatus}
         secondaryLabel="Back to Profile"
-        secondaryAction={() => router.back()}
+        secondaryAction={() => router.replace("/(tabs)/profile")}
       />
     );
   }
@@ -1554,7 +1582,7 @@ export default function IdentityVerificationWeb() {
           style={styles.backButton}
           onPress={() => {
             if (step === 1) {
-              router.back();
+              router.replace("/(tabs)/profile");
             } else {
               stopCamera();
               setStep(step === 3 ? 2 : 1);
@@ -2528,6 +2556,8 @@ function StatusScreen({
   color,
   badge,
   documentScreening,
+  notice,
+  feedback,
   idPreviewUri,
   idPreviewLabel,
   primaryLabel,
@@ -2543,6 +2573,8 @@ function StatusScreen({
   color: string;
   badge: string;
   documentScreening?: DocumentScreening;
+  notice?: string;
+  feedback?: string;
   idPreviewUri?: string | null;
   idPreviewLabel?: string;
   primaryLabel: string;
@@ -2594,8 +2626,16 @@ function StatusScreen({
         <Text style={styles.statusMessage}>
           {message}
         </Text>
+        {notice ? (
+          <Text style={styles.statusNotice}>{notice}</Text>
+        ) : null}
+        {feedback ? (
+          <Text style={styles.statusFeedback} accessibilityLiveRegion="polite">
+            {feedback}
+          </Text>
+        ) : null}
 
-                {!FACE_ONLY_MODE ? <DocumentScreeningSummary screening={documentScreening} /> : null}
+        {!FACE_ONLY_MODE ? <DocumentScreeningSummary screening={documentScreening} /> : null}
 
         {idPreviewUri ? (
           <View style={styles.submittedIdCard}>
@@ -3514,6 +3554,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "900",
     textAlign: "center",
+  },
+  statusNotice: {
+    color: "#475569", fontSize: 12, lineHeight: 19,
+    textAlign: "center", marginTop: 8,
+  },
+  statusFeedback: {
+    color: "#0F766E", fontSize: 12, lineHeight: 18,
+    fontWeight: "700", textAlign: "center", marginTop: 12,
   },
   statusMessage: {
     marginTop: 8,
