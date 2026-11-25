@@ -5767,7 +5767,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
     documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
-    reviewTrack: ["blurry_id_review", "priority_admin_review", "standard_admin_review", "three_failed_attempts"].includes(verification.reviewTrack)
+    reviewTrack: ["blurry_id_review", "priority_admin_review", "standard_admin_review", "three_failed_attempts", "face_only_admin_review"].includes(verification.reviewTrack)
       ? verification.reviewTrack : "none",
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
