@@ -1,0 +1,167 @@
+name: Guarded LIVE Resident Face Match No Score (HOSTING ONLY)
+on:
+  push:
+    branches: [release/resident-face-match-no-score-20261125]
+    paths: [.github/workflows/release-resident-face-match-no-score-20261125.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-hosting:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      PINNED_HOSTING_SHA: 4e2c5b47872dc69a678d6235a34b29662a5c1089
+      QA_COMMIT_SHA: 0ff239c242ffa30f221a53b1981e9686ec432474
+      SITE: volunserve-3aa5b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Fail closed on non-QA, backend, Firestore, or other UI changes
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const cp=require('node:child_process'),fs=require('node:fs'),a=require('node:assert/strict');
+          const base=process.env.PINNED_HOSTING_SHA,qa=process.env.QA_COMMIT_SHA;
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'});
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          cp.execFileSync('git',['merge-base','--is-ancestor',qa,'HEAD']);
+          cp.execFileSync('git',['diff','--check',base,'HEAD']);
+          const changed=git('diff','--name-only',base,'HEAD').trim().split('\n').sort();
+          a.deepEqual(changed,[
+            '.github/workflows/qa-face-match-current-live-20261125.yml',
+            'app/identity-verification.web.tsx',
+            'app/identity-verification.tsx',
+            'lib/identityVerification.ts',
+            'scripts/test-current-live-face-verdict-20261125.cjs',
+            '.github/workflows/release-resident-face-match-no-score-20261125.yml',
+            'scripts/identity-resident-face-match-rollback-20261125.cjs'
+          ].sort(),'BLOCKED: unrelated published features would change');
+          for(const p of ['app/identity-verification.web.tsx','app/identity-verification.tsx',
+             'lib/identityVerification.ts']){
+            a.equal(fs.readFileSync(p,'utf8'),git('show',qa+':'+p),
+              'BLOCKED: exact QA validated UI changed since success');
+          }
+          a.equal(fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8'),
+            git('show',base+':app/(admin)/identity-reviews.tsx'),
+            'BLOCKED: already LIVE Admin Face Match labels would be reverted');
+          console.log('PASS: exact QA-green resident UX on latest published Hosting revision');
+          JS
+          node scripts/test-current-live-face-verdict-20261125.cjs
+      - name: Confirm actual LIVE public marker is exact published base
+        run: VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA" node scripts/check-live-hosting.cjs
+      - name: Check existing original AI endpoints and secure evidence backend (read-only)
+        run: |
+          node <<'JS'
+          const checks=[
+            ['Python health','https://volunserve-identity-ai.onrender.com/health','GET',200],
+            ['Node health','https://volunserve.onrender.com/health','GET',200],
+            ['Private Python face match','https://volunserve-identity-ai.onrender.com/verify-face-only','POST',401],
+            ['Firebase-authenticated face match','https://volunserve.onrender.com/api/identity/verify-face-only','POST',401]
+          ];
+          (async()=>{
+            for(const [name,url,method,status] of checks){
+              let r;
+              for(let i=0;i<3;i++){
+                try{r=await fetch(url,{method,redirect:'error',signal:AbortSignal.timeout(45000)});break;}
+                catch(e){if(i===2)throw e;await new Promise(done=>setTimeout(done,5000));}
+              }
+              if(r.status!==status)throw Error('BLOCKED '+name+' HTTP '+r.status+' not '+status);
+              if(name==='Node health'){
+                const b=await r.json();
+                if(b.ok!==true||b.assistanceEvidenceStorage!=='secure_cloudinary_configured')
+                  throw Error('BLOCKED: original secure Cloudinary not ready');
+              }
+              if(name==='Python health'){
+                const b=await r.json();
+                if(b.ok!==true||b.verificationEngineReady!==true||b.internalAuthConfigured!==true)
+                  throw Error('BLOCKED: original face matcher is not ready');
+              }
+              console.log('PASS',name,status);
+            }
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          JS
+      - name: Exact production TypeScript regression and web export
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node <<'JS'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const m=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          a.equal(m.firebaseProject,'volunserve-3aa5b');
+          a.equal(m.revision,process.env.GITHUB_SHA);
+          console.log('PASS exact new Hosting SHA',m.revision);
+          JS
+      - name: Verify existing production Hosting credential without disclosure
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::Missing scoped production Hosting credential"; exit 1; }
+          node <<'JS'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const c=JSON.parse(process.env.FIREBASE_SA);
+          a.equal(c.type,'service_account');a.equal(c.project_id,'volunserve-3aa5b');
+          a(c.private_key&&c.client_email,'BLOCKED: invalid production Hosting key');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/resident-face-only-prod.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS: correct scoped Firebase Hosting service account');
+          JS
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/resident-face-only-prod.json" >> "$GITHUB_ENV"
+      - name: Pin immutable old LIVE version, deploy Hosting only and rollback on failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
+          node scripts/check-live-hosting.cjs
+          PIN="$RUNNER_TEMP/resident-face-verdict-old-hosting.json"
+          SCRIPT=scripts/identity-resident-face-match-rollback-20261125.cjs
+          node "$SCRIPT" selftest
+          node "$SCRIPT" capture "$PIN"
+          node "$SCRIPT" check "$PIN"
+          DEPLOY_STARTED=0
+          rollback_on_failure() {
+            STATUS=$?
+            trap - EXIT
+            if [ "$STATUS" -ne 0 ] && [ "$DEPLOY_STARTED" = 1 ]; then
+              echo "::error::Hosting verification failed; restoring exact old Firebase Hosting version"
+              if node "$SCRIPT" rollback "$PIN"; then
+                export VOLUNSERVE_EXPECTED_SHA="$PINNED_HOSTING_SHA"
+                node scripts/check-live-hosting.cjs || echo "::error::Rollback accepted but old public marker not confirmed"
+              else
+                echo "::error::Automatic rollback failed; manual Firebase Hosting restore required"
+              fi
+            fi
+            exit "$STATUS"
+          }
+          trap rollback_on_failure EXIT
+          node "$SCRIPT" check "$PIN"
+          DEPLOY_STARTED=1
+          npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
+          export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
+          VERIFIED=0
+          for i in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then VERIFIED=1;break;fi
+            sleep 12
+          done
+          test "$VERIFIED" = 1 || { echo "::error::New live revision verification failed"; exit 1; }
+          trap - EXIT
+          echo 'LIVE_RELEASE_SUCCESS: Resident Face Match binary labels; no score UI; Admin gate unchanged'
