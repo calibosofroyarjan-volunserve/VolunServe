@@ -1,0 +1,78 @@
+name: QA Admin Private Identity Image Render Gate (NO DEPLOY)
+on:
+  push:
+    branches: [qa/admin-identity-photo-render-confirmation-20261125]
+    paths:
+      - app/(admin)/identity-reviews.tsx
+      - .github/workflows/qa-admin-identity-photo-render-confirmation-20261125.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-photo-load-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Guard exact previously deployed Hosting source and two-file scope
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='a35d708829047fe86f04d988ad21966457ccbdea';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          cp.execFileSync('git',['diff','--check',base,'HEAD']);
+          const files=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(files,[
+            '.github/workflows/qa-admin-identity-photo-render-confirmation-20261125.yml',
+            'app/(admin)/identity-reviews.tsx',
+          ].sort(),'Only Admin photo review UI and its no-deploy QA workflow may change');
+          console.log('PASS: all existing live modules, Resident scan, backend, rules and certificates unchanged');
+          JS
+      - name: Assert UI cannot approve based on URL strings alone
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const src=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+          const checks=[
+            ['Must record successful front and selfie image renders',src.includes('loadedEvidenceUris.front === evidenceUris.front') && src.includes('loadedEvidenceUris.selfie === evidenceUris.selfie')],
+            ['Actual React Native image onLoad callback',src.includes('onLoad={() => setLoadedEvidenceUris(')],
+            ['Broken Cloudinary photo must block verification',src.includes('onError={() => {') && src.includes('setLoadedEvidenceUris(previous => ({...previous, [tile.key]: null}))')],
+            ['No image bytes or URL logged in browser',!src.includes('console.log(uri)')],
+            ['Failed image renders visible Admin message',src.includes('A protected ID or selfie image could not be displayed.')],
+            ['ExpiresAt checked from protected server response',src.includes('const expiresAt = Number(body.expiresAt)')],
+            ['Expiration revokes image readiness',src.includes('evidenceExpiresAt * 1000 > Date.now()')],
+            ['Automatic expiry revocation timer',src.includes('setTimeout(() => {') && src.includes('Protected photo links expired. Refresh')],
+            ['Retake/refresh resets previous loaded-image state',src.includes('setLoadedEvidenceUris({});')],
+            ['Approval gate uses verified photos',src.includes('!eligibleFaceOnly || !faceOnlyEvidenceReady')],
+            ['Manual issuer attestation preserved',src.includes('!issuerReviewAttested') && src.includes('validationMethod')],
+            ['No automatic Verified Resident promotion',!src.includes('identityVerified: true,')],
+            ['Protected images fetched through privileged Node endpoint',src.includes('/api/admin/identity/reviews/') && src.includes('getIdToken(true)')],
+            ['Original face comparison rule preserved',src.includes('item.faceComparisonPassed === true')],
+          ];
+          checks.forEach(([label,passed])=>{assert.equal(passed,true,label);console.log('PASS:',label)});
+          console.log('SOURCE ONLY: cannot prove authenticated browser photo fetch/Cloudinary availability with synthetic source checks');
+          JS
+      - name: Install dependencies and TypeScript validation
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Compile face-only website without publishing
+        run: |
+          npx expo export --platform web --output-dir dist
+          test -f dist/index.html
+          echo "PASS: no Firebase, Render, or Hosting deployment"
+# No real identity media, Auth test accounts, production writes, or external uploads.
