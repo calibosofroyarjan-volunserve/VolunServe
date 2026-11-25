@@ -139,6 +139,9 @@ jobs:
             print('RELEASE_BLOCKER_%02d'%i,b)
           print('RELEASE_DECISION: BLOCKED for hosted identity media and deployment')
           print('AUDIT_SCOPE: eight STAGING HTTPS GETs only, zero production requests, zero uploads, zero paid services, zero Firebase writes')
+          if blockers:
+            raise SystemExit('RELEASE_READINESS_FAIL_CLOSED: hosted verification remains BLOCKED; see RELEASE_BLOCKER lines above')
+          print('RELEASE_READINESS: prerequisites observed; still requires independent credential ownership verification before any uploads')
           PY
 # A passing GitHub workflow means observations executed safely; it is NOT
 # an approval for deployment or hosted private-ID media tests.
