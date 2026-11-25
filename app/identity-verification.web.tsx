@@ -2591,7 +2591,7 @@ function StatusScreen({
           {message}
         </Text>
 
-                <DocumentScreeningSummary screening={documentScreening} />
+                {!FACE_ONLY_MODE ? <DocumentScreeningSummary screening={documentScreening} /> : null}
 
         {idPreviewUri ? (
           <View style={styles.submittedIdCard}>
