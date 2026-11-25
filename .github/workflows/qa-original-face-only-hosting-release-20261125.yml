@@ -1,0 +1,67 @@
+name: Original Face-Only Hosting Release Candidate - No Deploy
+on:
+  push:
+    branches: [release/original-face-only-hosting-20261125]
+    paths: [.github/workflows/qa-original-face-only-hosting-release-20261125.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  production-web-dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY: 'true'
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Production release safety scope and exact live Hosting ancestor
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const assert=require('node:assert/strict');
+            const {owner,repo}=context.repo;
+            const baseline='5af28d279618dacd5eab518e5e0d52259eae8844';
+            const cmp=await github.rest.repos.compareCommits({owner,repo,base:baseline,head:context.sha});
+            assert.equal(cmp.data.behind_by,0,'Release must be based on pinned actual Hosting revision');
+            const files=(cmp.data.files||[]).map(x=>x.filename).sort();
+            assert.deepEqual(files,[
+              '.github/workflows/qa-original-face-only-hosting-release-20261125.yml',
+              'app/(admin)/identity-reviews.tsx',
+              'app/identity-verification.web.tsx',
+              'lib/identityVerification.ts'
+            ].sort(),'NO other app/volunteer/event/cert/donation/rules/login code may change');
+            const load=async(path,ref)=>{
+              const r=await github.rest.repos.getContent({owner,repo,path,ref});
+              return Buffer.from(r.data.content,'base64').toString('utf8');
+            };
+            const [oldUI,newUI]=await Promise.all([
+              load('app/identity-verification.web.tsx',baseline),
+              load('app/identity-verification.web.tsx',context.sha)
+            ]);
+            const style=s=>s.slice(s.lastIndexOf('const styles = StyleSheet.create('));
+            assert.equal(style(oldUI),style(newUI),'Cannot change live identity UI style');
+            assert.ok(newUI.includes('Front of National ID') && newUI.includes('Back of National ID'));
+            assert.ok(newUI.includes('EXPO_PUBLIC_VOLUNSERVE_ORIGINAL_FACE_ONLY === "true"'));
+            core.info('PASS: current Hosting design and unrelated modules unchanged');
+      - name: Offline production web dependency and TypeScript checks
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Build a real Expo web artifact with original face-only mode
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Read-only check live route and current production revision
+        run: |
+          VOLUNSERVE_EXPECTED_SHA=5af28d279618dacd5eab518e5e0d52259eae8844 node scripts/check-live-hosting.cjs
+      - name: Block any deployment in this validation
+        run: |
+          echo 'PASS: NO DEPLOY; no production secrets, live Firebase calls, or Cloudinary uploads'
