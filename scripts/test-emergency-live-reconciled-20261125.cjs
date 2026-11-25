@@ -44,6 +44,23 @@ test("Admin only manually offers verified approved task to eligible volunteer",(
   assert.match(admin,/activeLguResponderUid/);
 });
 
+test("Resident and Volunteer screens never trigger automatic Volunteer fan-out",()=>{
+  for(const entry of [
+    "components/DisasterResponse.web.tsx",
+    "components/DisasterResponse.native.tsx",
+    "app/(tabs)/volunteer.tsx",
+    "app/(tabs)/volunteer.web.tsx",
+    "components/tabs/ResponseFlow.web.tsx",
+  ]){
+    const source=read(entry);
+    assert.doesNotMatch(source,/requestRenderEmergencyAuto|respondRenderEmergencyAuto/);
+    assert.doesNotMatch(source,/emergency-auto\/report-submitted|emergency-auto\/respond/);
+  }
+  // Manual Admin assignment is still the only Volunteer task-offer action.
+  assert.match(admin,/onPress=\{\(\) => assignVolunteerToCase\(incident, volunteer\)\}/);
+  assert.match(admin,/automaticStatus="off"/);
+});
+
 test("Volunteer web/native one-tap completion has no required Field Report",()=>{
   for(const s of [volunteer,volunteerWeb]){
     for(const key of ['accepted: "offered"','declined: "offered"','responding: "accepted"','on_site: "responding"','completed: "on_site"']) {
