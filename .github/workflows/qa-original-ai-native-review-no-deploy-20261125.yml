@@ -1,0 +1,50 @@
+name: Original AI Native Admin Review Regression (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/original-ai-native-admin-review-hosting-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-identity:
+    name: Native pending Admin review vs face stage
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify protected original Hosting UI base and file allowlist
+        run: |
+          git merge-base --is-ancestor 5af28d279618dacd5eab518e5e0d52259eae8844 HEAD
+          git diff --exit-code 5af28d279618dacd5eab518e5e0d52259eae8844 HEAD -- \
+            'app/identity-verification.web.tsx' \
+            'lib/identityVerification.ts' 'backend/' 'identity-ai/' 'firestore.rules'
+          node - <<'NODE'
+          const cp = require('node:child_process');
+          const assert=require('node:assert/strict');
+          const base='5af28d279618dacd5eab518e5e0d52259eae8844';
+          const paths=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          const approved=[
+            'app/identity-verification.tsx',
+            'scripts/test-original-ai-native-review-no-face-20261125.cjs',
+            '.github/workflows/qa-original-ai-native-review-no-deploy-20261125.yml'
+          ];
+          for(const path of paths)assert.ok(approved.includes(path),'Unrelated original Hosting file changed: '+path);
+          console.log('PASS: exact restored Hosting source, only native review and QA files changed');
+          NODE
+      - name: Execute real native OCR decision block with synthetic outcomes
+        run: |
+          node --check scripts/test-original-ai-native-review-no-face-20261125.cjs
+          node --test scripts/test-original-ai-native-review-no-face-20261125.cjs
+      - name: Typecheck restored web and native original-AI UI
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+# This workflow does not deploy, request secrets, open cameras, write Firebase,
+# call live Render, upload documents, or run third-party identity providers.
