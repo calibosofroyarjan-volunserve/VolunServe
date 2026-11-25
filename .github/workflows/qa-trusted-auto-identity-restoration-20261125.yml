@@ -7,6 +7,7 @@ on:
       - backend/identityTrustedAutomaticCompletion.js
       - backend/test-identityTrustedAutomaticCompletion.js
       - backend/test-identityAutoApprovalGateway.js
+      - backend/test-identity-final-admin-only.js
       - .github/workflows/qa-trusted-auto-identity-restoration-20261125.yml
   workflow_dispatch:
 permissions:
@@ -40,6 +41,7 @@ jobs:
             'backend/server.js',
             'backend/test-identityTrustedAutomaticCompletion.js',
             'backend/test-identityAutoApprovalGateway.js',
+            'backend/test-identity-final-admin-only.js',
           ].sort();
           assert.deepEqual(actual,allowed,'No unrelated/production changes allowed');
           console.log('PASS: exact deployed backend baseline, limited QA-only scope');
